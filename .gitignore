@@ -1,0 +1,33 @@
+node_modules/
+dist/
+coverage/
+.npm/
+
+# Local assistant/editor state
+.claude/
+.codex/
+.cursor/
+.idea/
+.vscode/
+
+# Environment and local overrides
+.env
+.env.*
+!.env.example
+*.local
+*.local.*
+
+# Runtime output and private browser profile
+downloads/*
+!downloads/.gitkeep
+profile/*
+!profile/.gitkeep
+
+# Tooling output
+playwright-report/
+test-results/
+*.tsbuildinfo
+*.log
+*.tgz
+Thumbs.db
+.DS_Store

@@ -12,6 +12,7 @@ export interface FireflyUrls {
   removeBackground: string;
   textToImage: string;
   variations: string;
+  video: string;
 }
 
 export interface SelectorOverrides {
@@ -99,6 +100,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       textToImage:
         readString(env, "FIREFLY_TEXT_TO_IMAGE_URL") ?? `${baseUrl}/generate/images`,
       variations: readString(env, "FIREFLY_VARIATIONS_URL") ?? baseUrl,
+      video: readString(env, "FIREFLY_VIDEO_URL") ?? `${baseUrl}/generate/video`,
     },
   };
 }

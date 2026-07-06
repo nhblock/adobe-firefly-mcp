@@ -109,13 +109,13 @@ export async function detectAuthState(
   config: AppConfig,
 ): Promise<AuthState> {
   const groups = selectorGroups(config);
-  const prompt = await waitForFirstVisible(page, groups.promptInputs, 750);
+  const prompt = await waitForFirstVisible(page, groups.promptInputs, 3000);
 
   if (prompt !== undefined) {
     return "ready";
   }
 
-  const authMarker = await waitForFirstVisible(page, groups.authMarkers, 750);
+  const authMarker = await waitForFirstVisible(page, groups.authMarkers, 1500);
   if (authMarker !== undefined || /adobeid|sign[_-]?in|login|auth/u.test(page.url())) {
     return "sign_in_required";
   }

@@ -7,8 +7,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { BrowserManager } from "./browser.js";
 import { loadConfig, SERVER_NAME, SERVER_VERSION, type AppConfig } from "./config.js";
 import { Logger } from "./logger.js";
+import { registerDomInspectTool } from "./tools/domInspect.js";
+import { registerDomWatchTool } from "./tools/domWatch.js";
 import { registerExpandTool } from "./tools/expand.js";
 import { registerGenerateTool } from "./tools/generate.js";
+import { registerGenerateVideoTool } from "./tools/generateVideo.js";
 import { registerRemoveBackgroundTool } from "./tools/removeBackground.js";
 import { type ToolDeps } from "./tools/shared.js";
 import { registerStatusTool } from "./tools/status.js";
@@ -35,7 +38,10 @@ export function createRuntime(config = loadConfig()): ServerRuntime {
     logger: logger.child({ component: "tool" }),
   };
 
+  registerDomInspectTool(server, deps);
+  registerDomWatchTool(server, deps);
   registerGenerateTool(server, deps);
+  registerGenerateVideoTool(server, deps);
   registerVariationsTool(server, deps);
   registerExpandTool(server, deps);
   registerRemoveBackgroundTool(server, deps);

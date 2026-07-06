@@ -1,8 +1,15 @@
-import { chromium, type BrowserContext, type Page } from "playwright";
+import {
+  chromium,
+  type BrowserContext,
+  type Page,
+  type Request,
+  type Response,
+} from "playwright";
 
 import type { AppConfig } from "./config.js";
 import type { Logger } from "./logger.js";
 import { ensureDirectory } from "./utils/filesystem.js";
+import { RingBuffer } from "./utils/ringBuffer.js";
 
 export interface BrowserStatus {
   downloadsDir: string;
@@ -12,8 +19,29 @@ export interface BrowserStatus {
   profileDir: string;
 }
 
+export interface ConsoleEntry {
+  text: string;
+  timestamp: string;
+  type: string;
+}
+
+export interface NetworkEntry {
+  duration?: number;
+  method: string;
+  resourceType: string;
+  startTime: number;
+  status?: number;
+  url: string;
+}
+
+const BUFFER_CAPACITY = 500;
+
 export class BrowserManager {
   private contextPromise: Promise<BrowserContext> | undefined;
+  private readonly consoleBuffer = new RingBuffer<ConsoleEntry>(BUFFER_CAPACITY);
+  private readonly networkBuffer = new RingBuffer<NetworkEntry>(BUFFER_CAPACITY);
+  private readonly requestTimes = new Map<string, number>();
+  private readonly listenersInstalled = new WeakSet<Page>();
 
   public constructor(
     private readonly config: AppConfig,
@@ -39,7 +67,77 @@ export class BrowserManager {
     }
 
     await page.bringToFront().catch(() => undefined);
+    this.ensureListeners(page);
     return page;
+  }
+
+  public ensureListeners(page: Page): void {
+    if (this.listenersInstalled.has(page)) {
+      return;
+    }
+
+    page.on("console", (msg) => {
+      this.consoleBuffer.add({
+        text: msg.text(),
+        timestamp: new Date().toISOString(),
+        type: msg.type(),
+      });
+    });
+
+    page.on("request", (req: Request) => {
+      const key = req.url();
+      this.requestTimes.set(key, Date.now());
+    });
+
+    page.on("response", (res: Response) => {
+      const req = res.request();
+      const key = req.url();
+      const startTime = this.requestTimes.get(key) ?? Date.now();
+      this.requestTimes.delete(key);
+
+      this.networkBuffer.add({
+        duration: Date.now() - startTime,
+        method: req.method(),
+        resourceType: req.resourceType(),
+        startTime,
+        status: res.status(),
+        url: key,
+      });
+    });
+
+    page.on("requestfailed", (req: Request) => {
+      const key = req.url();
+      const startTime = this.requestTimes.get(key) ?? Date.now();
+      this.requestTimes.delete(key);
+
+      this.networkBuffer.add({
+        duration: Date.now() - startTime,
+        method: req.method(),
+        resourceType: req.resourceType(),
+        startTime,
+        status: 0,
+        url: key,
+      });
+    });
+
+    this.listenersInstalled.add(page);
+    this.logger.debug("Installed capture listeners on page", {
+      url: page.url(),
+    });
+  }
+
+  public getConsoleMessages(limit?: number): ConsoleEntry[] {
+    return this.consoleBuffer.toArray(limit);
+  }
+
+  public getNetworkRequests(limit?: number): NetworkEntry[] {
+    return this.networkBuffer.toArray(limit);
+  }
+
+  public clearBuffers(): void {
+    this.consoleBuffer.clear();
+    this.networkBuffer.clear();
+    this.requestTimes.clear();
   }
 
   public async status(): Promise<BrowserStatus> {

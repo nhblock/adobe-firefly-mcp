@@ -13,14 +13,14 @@ import {
 } from "../utils/filesystem.js";
 import { downloadGeneratedImages, type DownloadedImage } from "./download.js";
 import { composePrompt, escapeRegExp, shortPromptLabel } from "./prompts.js";
-import { selectorGroups } from "./selectors.js";
+import { selectors } from "./selectors.js";
+import { resolveLocator } from "./locatorResolver.js";
+import { captureDiagnostics } from "./diagnostics.js";
 import {
   FireflyAutomationError,
   collectVisibleImageFingerprints,
   dismissKnownDialogs,
   ensurePromptReady,
-  fillFirstVisible,
-  waitForFirstVisible,
   waitForNewImages,
 } from "./wait.js";
 
@@ -45,6 +45,7 @@ export interface ImageWorkflowInput {
 export interface FireflyRunResult {
   diagnostics: {
     generateClickScreenshots: GenerateClickScreenshots;
+    pageDiagnostics?: Record<string, unknown>;
   };
   durationMs: number;
   files: DownloadedImage[];
@@ -80,21 +81,22 @@ export async function runTextToImage(
   await ensurePromptReady(page, config);
   await dismissKnownDialogs(page, config);
 
-  const groups = selectorGroups(config);
   const prompt = composePrompt(input);
-  const promptField = await fillFirstVisible(
-    page,
-    groups.promptInputs,
-    prompt,
-    config.operationTimeoutMs,
-  );
 
-  if (promptField === undefined) {
+  let promptField;
+  try {
+    promptField = await resolveLocator(page, selectors.image.prompt, {
+      timeout: config.operationTimeoutMs,
+      log: (msg) => logger.debug(msg),
+    });
+    await promptField.locator.fill(prompt);
+    logger.info("Prompt filled", { selector: promptField.candidate.name });
+  } catch (err) {
+    await captureDiagnostics(page, "image-prompt-fill-fail");
     throw new FireflyAutomationError(
-      "Could not fill the Firefly prompt input. Set FIREFLY_SELECTOR_PROMPT_INPUT if the UI changed.",
+      `Could not fill the Firefly prompt input. Set FIREFLY_SELECTOR_PROMPT_INPUT if the UI changed. ${err instanceof Error ? err.message : String(err)}`,
     );
   }
-  logger.info("Prompt filled", { selector: promptField.candidate.name });
 
   warnings.push(...(await applyOptionalControls(page, input)));
 
@@ -112,6 +114,7 @@ export async function runTextToImage(
   });
 
   if (files.length === 0) {
+    await captureDiagnostics(page, "image-no-files");
     throw new FireflyAutomationError(
       "Firefly generated images, but no downloadable images could be saved. Try setting FIREFLY_SELECTOR_DOWNLOAD_BUTTON.",
     );
@@ -147,18 +150,15 @@ export async function runImageWorkflow(
   await uploadImage(page, config, imagePath);
 
   if (input.prompt !== undefined && input.prompt.trim().length > 0) {
-    const groups = selectorGroups(config);
-    const filled = await fillFirstVisible(
-      page,
-      groups.promptInputs,
-      input.prompt.trim(),
-      5_000,
-    );
-
-    if (filled === undefined) {
+    try {
+      const promptLoc = await resolveLocator(page, selectors.image.prompt, {
+        timeout: 5000,
+        log: (msg) => logger.debug(msg),
+      });
+      await promptLoc.locator.fill(input.prompt.trim());
+      logger.info("Prompt filled", { selector: promptLoc.candidate.name });
+    } catch {
       warnings.push("Prompt was provided, but no optional prompt input was found.");
-    } else {
-      logger.info("Prompt filled", { selector: filled.candidate.name });
     }
   }
 
@@ -180,6 +180,7 @@ export async function runImageWorkflow(
   });
 
   if (files.length === 0) {
+    await captureDiagnostics(page, "image-workflow-no-files");
     throw new FireflyAutomationError(
       "Firefly completed the workflow, but no downloadable images could be saved.",
     );
@@ -215,17 +216,18 @@ async function clickGenerate(
   config: AppConfig,
   logger: Logger,
 ): Promise<GenerateClickScreenshots> {
-  const groups = selectorGroups(config);
   logger.info("Waiting for Generate button");
-  const button = await waitForFirstVisible(
-    page,
-    groups.generateButtons,
-    config.operationTimeoutMs,
-  );
 
-  if (button === undefined) {
+  let button;
+  try {
+    button = await resolveLocator(page, selectors.image.generate, {
+      timeout: config.operationTimeoutMs,
+      log: (msg) => logger.debug(msg),
+    });
+  } catch (err) {
+    await captureDiagnostics(page, "image-generate-not-found");
     throw new FireflyAutomationError(
-      "Could not find Firefly's generate/action button. Set FIREFLY_SELECTOR_GENERATE_BUTTON if the UI changed.",
+      `Could not find Firefly's generate/action button. Set FIREFLY_SELECTOR_GENERATE_BUTTON if the UI changed. ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
@@ -251,6 +253,7 @@ async function clickGenerate(
       logger,
       "failed",
     );
+    await captureDiagnostics(page, "image-generate-click-fail");
     throw new FireflyAutomationError(
       [
         "Failed to click the Firefly Generate button.",
@@ -327,26 +330,23 @@ async function uploadImage(
     return;
   }
 
-  const groups = selectorGroups(config);
-  const uploadButton = await waitForFirstVisible(
-    page,
-    groups.uploadButtons,
-    config.operationTimeoutMs,
-  );
-
-  if (uploadButton === undefined) {
+  try {
+    const uploadLoc = await resolveLocator(page, selectors.shared.upload, {
+      timeout: config.operationTimeoutMs,
+      log: () => {},
+    });
+    const fileChooserPromise = page.waitForEvent("filechooser", {
+      timeout: config.operationTimeoutMs,
+    });
+    await uploadLoc.locator.click({ timeout: config.operationTimeoutMs });
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(imagePath);
+    await page.waitForTimeout(1_000);
+  } catch (err) {
     throw new FireflyAutomationError(
-      "Could not find an upload control. Set FIREFLY_SELECTOR_UPLOAD_BUTTON if the UI changed.",
+      `Could not find an upload control. Set FIREFLY_SELECTOR_UPLOAD_BUTTON if the UI changed. ${err instanceof Error ? err.message : String(err)}`,
     );
   }
-
-  const fileChooserPromise = page.waitForEvent("filechooser", {
-    timeout: config.operationTimeoutMs,
-  });
-  await uploadButton.locator.click({ timeout: config.operationTimeoutMs });
-  const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles(imagePath);
-  await page.waitForTimeout(1_000);
 }
 
 async function applyOptionalControls(

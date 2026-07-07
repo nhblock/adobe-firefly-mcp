@@ -1,45 +1,87 @@
 import type { Locator, Page } from "playwright";
 
 import { selectors, locatorFor, type SelectorCandidate } from "./selectors.js";
+import { SelfHealingEngine, type HealingConfig } from "./selfHealing.js";
+import type { AppConfig } from "../config.js";
 
 interface ResolveResult {
   candidate: SelectorCandidate;
   locator: Locator;
+  healed?: boolean;
+  confidence?: number;
 }
 
 export async function resolveLocator(
   root: Page | Locator,
   candidates: SelectorCandidate[],
-  options: { timeout?: number; log?: (msg: string) => void } = {},
+  options: {
+    timeout?: number;
+    log?: (msg: string) => void;
+    config?: AppConfig;
+    healingConfig?: Partial<HealingConfig>;
+  } = {},
 ): Promise<ResolveResult> {
-  const { timeout = 12000, log = console.error } = options;
+  const { timeout = 12000, log = console.error, config, healingConfig } = options;
   const deadline = Date.now() + timeout;
 
-  for (const candidate of candidates) {
-    const start = Date.now();
+  // Step 1: Try primary selector (first candidate)
+  const primaryCandidate = candidates[0];
+  if (primaryCandidate) {
     try {
-      const loc = locatorFor(root, candidate);
-      await loc
-        .first()
-        .waitFor({ state: "visible", timeout: Math.max(deadline - Date.now(), 100) });
-      await loc
-        .first()
-        .scrollIntoViewIfNeeded({ timeout: Math.max(deadline - Date.now(), 100) });
+      const loc = locatorFor(root, primaryCandidate);
+      await loc.first().waitFor({ state: "visible", timeout: Math.min(timeout, 3000) });
+      await loc.first().scrollIntoViewIfNeeded({ timeout: Math.min(timeout, 1000) });
       const enabled = await loc
         .first()
         .isEnabled()
         .catch(() => false);
       log(
-        `[locator-resolve] success: ${candidate.name} in ${Date.now() - start}ms (enabled=${enabled})`,
+        `[locator-resolve] primary selector succeeded: ${primaryCandidate.name} in ${Date.now() - (deadline - timeout)}ms (enabled=${enabled})`,
       );
-      return { candidate, locator: loc.first() };
+      return { candidate: primaryCandidate, locator: loc.first() };
     } catch {
-      log(`[locator-resolve] failed: ${candidate.name} in ${Date.now() - start}ms`);
+      log(`[locator-resolve] primary selector failed: ${primaryCandidate.name}`);
     }
   }
 
+  // Step 2: Try remaining candidates
+  for (let i = 1; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    if (!candidate) continue;
+    try {
+      const loc = locatorFor(root, candidate);
+      await loc.first().waitFor({ state: "visible", timeout: Math.min(timeout, 2000) });
+      await loc.first().scrollIntoViewIfNeeded({ timeout: Math.min(timeout, 1000) });
+      log(`[locator-resolve] fallback candidate succeeded: ${candidate.name}`);
+      return { candidate, locator: loc.first() };
+    } catch {
+      // Continue to next candidate
+    }
+  }
+
+  // Step 3: Use self-healing engine if Page is available
+  if ("url" in root && config) {
+    log("[locator-resolve] all candidates failed, attempting self-healing");
+    const engine = new SelfHealingEngine(root, config, healingConfig);
+    const result = await engine.resolveWithHealing(candidates, { timeout, log });
+
+    if (result.success && result.recoveredLocator && result.recoveredCandidate) {
+      log(
+        `[locator-resolve] self-healing succeeded: ${result.recoveredCandidate.name} (confidence: ${result.confidence.toFixed(2)})`,
+      );
+      return {
+        candidate: result.recoveredCandidate,
+        locator: result.recoveredLocator,
+        healed: true,
+        confidence: result.confidence,
+      };
+    }
+  }
+
+  // Step 4: No recovery possible
+  const elapsed = Date.now() - (deadline - timeout);
   throw new Error(
-    `[locator-resolve] All candidates failed after ${Date.now() - (deadline - timeout)}ms`,
+    `[locator-resolve] All candidates and self-healing failed after ${elapsed}ms`,
   );
 }
 

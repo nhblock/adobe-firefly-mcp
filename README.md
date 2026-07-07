@@ -18,6 +18,7 @@ It does not use a private Adobe API, automate login credentials, bypass authenti
 - `firefly_status` - open/check the persistent browser profile, auth state, paths, and optional screenshot.
 - `firefly_dom_inspect` - inspect the current DOM state for debugging automation issues.
 - `firefly_dom_watch` - watch for DOM mutations in real-time.
+- `firefly_debug_bundle` - capture comprehensive debug bundle with 26+ diagnostic files.
 
 Generated files are saved locally and returned as absolute file paths.
 
@@ -238,6 +239,66 @@ Example use cases:
 - "Monitor when the spinner disappears and results show"
 - "Track when the download button becomes enabled"
 
+### Debug Bundle (Comprehensive Diagnostics)
+
+The `firefly_debug_bundle` tool captures a complete diagnostic snapshot with 26+ files. This is a read-only tool that never clicks Generate, uploads files, modifies settings, changes prompts, or navigates away.
+
+```json
+{}
+```
+
+Optional: Specify a URL to navigate to first:
+
+```json
+{
+  "url": "https://firefly.adobe.com/generate/video"
+}
+```
+
+#### Output Files
+
+The tool creates a timestamped directory at `debug/bundles/YYYY-MM-DDTHH-MM-SS/` with:
+
+| File                     | Description                                          |
+| ------------------------ | ---------------------------------------------------- |
+| `page.json`              | URL, title, browser version, frameworks detected     |
+| `browser.json`           | Browser status and config                            |
+| `dom.json`               | DOM tree, shadow DOM count, iframes, forms, dialogs  |
+| `accessibility.json`     | Accessibility tree snapshot                          |
+| `performance.json`       | Navigation Timing, LCP, FCP, memory usage            |
+| `console.json`           | Console messages (last 500)                          |
+| `network.json`           | Network requests with timing (last 500)              |
+| `cookies.json`           | All browser cookies                                  |
+| `storage.json`           | localStorage and sessionStorage keys                 |
+| `framework.json`         | Detected frameworks (React, Vue, Angular, etc.)      |
+| `selectors.json`         | Discovered elements with bounding boxes              |
+| `locators.json`          | Selector validation results (exists/visible/enabled) |
+| `forms.json`             | Form elements and validation state                   |
+| `dialogs.json`           | Modal dialogs and alerts                             |
+| `shadow-dom.json`        | Shadow DOM tree traversal                            |
+| `iframes.json`           | Iframe inspection                                    |
+| `permissions.json`       | Browser permissions state                            |
+| `fingerprint.json`       | Browser fingerprint (user agent, WebGL, etc.)        |
+| `service-workers.json`   | Registered service workers                           |
+| `indexeddb.json`         | IndexedDB databases                                  |
+| `localstorage.json`      | localStorage contents                                |
+| `sessionstorage.json`    | sessionStorage contents                              |
+| `automation-health.json` | Automation detection indicators (webdriver, etc.)    |
+| `authentication.json`    | Auth state, Adobe cookies, token expiry              |
+| `selector-report.md`     | Human-readable selector validation report            |
+| `automation-health.md`   | Human-readable automation health report              |
+| `summary.md`             | Overall diagnostic summary with confidence level     |
+| `screenshot.png`         | Full-page screenshot                                 |
+| `page.html`              | Complete HTML snapshot                               |
+
+#### Use Cases
+
+- "Run a full diagnostic on the current page"
+- "Check if automation is being detected"
+- "Validate all selectors are still working"
+- "Get a snapshot before something breaks"
+- "Compare browser fingerprints between sessions"
+
 Successful tool calls return JSON like:
 
 ```json
@@ -280,6 +341,8 @@ All configuration is optional.
 | `FIREFLY_SELECTOR_GENERATE_BUTTON` | built-in candidates              | CSS selector override for the generate/action button.                  |
 | `FIREFLY_SELECTOR_DOWNLOAD_BUTTON` | built-in candidates              | CSS selector override for download buttons.                            |
 | `FIREFLY_SELECTOR_UPLOAD_BUTTON`   | built-in candidates              | CSS selector override for upload controls.                             |
+| `FIREFLY_USE_PERSISTENT_PROFILE`   | `false`                          | Use real Chrome with user's existing profile instead of Chromium.      |
+| `FIREFLY_USER_DATA_DIR`            | undefined                        | Path to Chrome user data directory (required when using persistent).   |
 
 Adobe can change the Firefly UI at any time. The server uses resilient Playwright locators first, then CSS selector overrides when needed.
 
@@ -339,10 +402,13 @@ The video generation tool explicitly detects Firefly errors instead of treating 
 
 When automation fails:
 
-1. Run `firefly_status` to check auth state and take a screenshot
-2. Run `firefly_dom_inspect` with `mode: "full"` to see all selectors and page state
-3. Use `firefly_dom_watch` to monitor real-time DOM changes
-4. Check tool output for structured error diagnostics
+1. Run `firefly_debug_bundle` to capture a comprehensive diagnostic snapshot
+2. Run `firefly_status` to check auth state and take a screenshot
+3. Run `firefly_dom_inspect` with `mode: "full"` to see all selectors and page state
+4. Use `firefly_dom_watch` to monitor real-time DOM changes
+5. Check tool output for structured error diagnostics
+
+The debug bundle provides the most complete picture with 26+ diagnostic files, selector validation, automation health checks, and auth diagnostics.
 
 ## Limitations
 

@@ -14,6 +14,7 @@ import { registerGenerateTool } from "./tools/generate.js";
 import { registerGenerateVideoTool } from "./tools/generateVideo.js";
 import { registerRemoveBackgroundTool } from "./tools/removeBackground.js";
 import { type ToolDeps } from "./tools/shared.js";
+import { registerDebugBundleTool } from "./tools/debugBundleTool.js";
 import { registerStatusTool } from "./tools/status.js";
 import { registerVariationsTool } from "./tools/variations.js";
 
@@ -40,6 +41,7 @@ export function createRuntime(config = loadConfig()): ServerRuntime {
 
   registerDomInspectTool(server, deps);
   registerDomWatchTool(server, deps);
+  registerDebugBundleTool(server, deps);
   registerGenerateTool(server, deps);
   registerGenerateVideoTool(server, deps);
   registerVariationsTool(server, deps);

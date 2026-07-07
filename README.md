@@ -19,6 +19,7 @@ It does not use a private Adobe API, automate login credentials, bypass authenti
 - `firefly_dom_inspect` - inspect the current DOM state for debugging automation issues.
 - `firefly_dom_watch` - watch for DOM mutations in real-time.
 - `firefly_debug_bundle` - capture comprehensive debug bundle with 26+ diagnostic files.
+- `firefly_validate_environment` - check environment readiness and auto-fix common issues.
 
 Generated files are saved locally and returned as absolute file paths.
 
@@ -299,6 +300,47 @@ The tool creates a timestamped directory at `debug/bundles/YYYY-MM-DDTHH-MM-SS/`
 - "Get a snapshot before something breaks"
 - "Compare browser fingerprints between sessions"
 
+### Validate Environment
+
+`firefly_validate_environment` checks your environment readiness and optionally auto-fixes common issues:
+
+```json
+{
+  "autoFix": true
+}
+```
+
+#### Checks Performed
+
+- **Authentication**: Verifies Adobe session cookies are present and valid
+- **Selectors**: Validates all critical UI selectors still work
+- **Browser**: Confirms browser is available and launchable
+- **Cookies**: Checks cookie file integrity and expiration
+- **Storage**: Verifies storage directory exists and is writable
+- **Credits**: Attempts to detect Adobe credit/quota status
+- **Automation health**: Tests prompt input and download button availability
+
+#### Response
+
+```json
+{
+  "ok": true,
+  "readinessScore": 85,
+  "issues": [
+    {
+      "severity": "warning",
+      "category": "auth",
+      "message": "Adobe session cookie expired",
+      "autoFixed": false
+    }
+  ],
+  "autoFixes": [],
+  "recommendations": ["Re-authenticate with Adobe Firefly"]
+}
+```
+
+Readiness score ranges from 0 (completely broken) to 100 (fully operational).
+
 Successful tool calls return JSON like:
 
 ```json
@@ -343,8 +385,10 @@ All configuration is optional.
 | `FIREFLY_SELECTOR_UPLOAD_BUTTON`   | built-in candidates              | CSS selector override for upload controls.                             |
 | `FIREFLY_USE_PERSISTENT_PROFILE`   | `false`                          | Use real Chrome with user's existing profile instead of Chromium.      |
 | `FIREFLY_USER_DATA_DIR`            | undefined                        | Path to Chrome user data directory (required when using persistent).   |
+| `FIREFLY_SELF_HEALING_ENABLED`     | `true`                           | Enable automatic selector recovery.                                    |
+| `FIREFLY_SELF_HEALING_THRESHOLD`   | `0.7`                            | Minimum confidence score (0-1) to accept recovered selector.           |
 
-Adobe can change the Firefly UI at any time. The server uses resilient Playwright locators first, then CSS selector overrides when needed.
+Adobe can change the Firefly UI at any time. The server uses resilient Playwright locators first, then CSS selector overrides when needed. Self-healing automatically recovers when selectors break.
 
 ## Development
 
@@ -381,9 +425,69 @@ The server uses a modular architecture with centralized selectors, reusable util
 
 - **`src/firefly/selectors.ts`** - Centralized selector candidates for image, video, and shared UI elements
 - **`src/firefly/locatorResolver.ts`** - Reusable `resolveLocator()` with timeout, scroll, retry, and debug logging
+- **`src/firefly/selfHealing.ts`** - Self-healing engine with confidence scoring and selector recovery
 - **`src/firefly/diagnostics.ts`** - Automatic screenshot/HTML capture on failures
 - **`src/firefly/generationWait.ts`** - Generation completion monitoring with explicit error detection
 - **`src/firefly/downloads.ts`** - Robust download handling with `downloadMode: "first"|"all"`
+
+### Self-Healing Automation
+
+The server includes a self-healing selector recovery system that automatically recovers when Adobe changes their UI, without requiring code changes:
+
+#### Recovery Chain
+
+1. **Primary selector** - Try the first selector candidate (fastest, most specific)
+2. **Remaining candidates** - Try other predefined selector candidates
+3. **DOM inspector discovery** - If all candidates fail, discover elements by role, name, and text
+4. **Confidence scoring** - Each discovered element is scored based on match quality
+5. **Fail safely** - If no match exceeds confidence threshold (default 0.7), report failure
+
+#### Confidence Scoring
+
+Each selector candidate is scored based on its kind and match quality:
+
+| Selector Kind          | Base Score |
+| ---------------------- | ---------- |
+| `testId` (data-testid) | 100        |
+| `ariaLabel`            | 90         |
+| `role`                 | 85         |
+| `placeholder`          | 80         |
+| `label`                | 80         |
+| `text`                 | 70         |
+| `tag`                  | 40         |
+| `css` (dynamic/hashed) | 10         |
+
+Bonuses: visibility (+10), enabled (+5), unique match (+40).
+
+#### Usage
+
+Self-healing is integrated into `locatorResolver.ts`. When you call `resolveLocator()`, it automatically:
+
+1. Tries the primary selector candidate
+2. Falls back to other candidates if primary fails
+3. Uses self-healing engine if all candidates fail
+4. Returns `healed: true` and `confidence: number` when recovery succeeds
+5. Persists recovered selectors to `debug/recovered-selectors.json`
+
+```typescript
+const result = await resolveLocator(page, candidates, "Generate button", 3000);
+if (result.healed) {
+  console.log(`Healed with confidence: ${result.confidence}`);
+}
+```
+
+#### Configuration
+
+```typescript
+const config: AppConfig = {
+  selfHealing: {
+    enabled: true,
+    confidenceThreshold: 0.7, // 0-1, minimum confidence to accept
+    maxRecoveryAttempts: 3,
+    persistencePath: "debug/recovered-selectors.json",
+  },
+};
+```
 
 ### Error Detection
 

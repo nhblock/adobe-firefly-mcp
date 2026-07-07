@@ -165,28 +165,19 @@ export const selectors = {
   },
   shared: {
     auth: [
-      {
-        kind: "role" as const,
-        name: "sign-in button",
-        role: "button" as AriaRole,
-        text: /sign in|log in/i,
-      },
-      {
-        kind: "role" as const,
-        name: "sign-in link",
-        role: "link" as AriaRole,
-        text: /sign in|log in/i,
-      },
+      // Only match full-screen sign-in pages, NOT header buttons
       {
         kind: "text" as const,
         name: "Adobe sign-in text",
-        text: /sign in to adobe|continue to sign in|log in/i,
+        text: /sign in to adobe|continue to sign in/i,
       },
       {
         kind: "text" as const,
         name: "account text",
         text: /create an account|adobe account/i,
       },
+      // Header sign-in button is NOT an auth indicator - it's always there
+      // Removed: role "sign-in button" and "sign-in link"
     ],
     close: [
       {

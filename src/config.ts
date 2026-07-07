@@ -35,6 +35,8 @@ export interface AppConfig {
   profileDir: string;
   selectors: SelectorOverrides;
   urls: FireflyUrls;
+  usePersistentProfile: boolean;
+  userDataDir: string | undefined;
 }
 
 const DEFAULT_OPERATION_TIMEOUT_MS = 180_000;
@@ -60,6 +62,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const baseUrl = trimTrailingSlash(
     readString(env, "FIREFLY_BASE_URL") ?? "https://firefly.adobe.com",
   );
+
+  const usePersistentProfile = readBoolean(
+    env,
+    "FIREFLY_USE_PERSISTENT_PROFILE",
+    false,
+  );
+  const userDataDir = readString(env, "FIREFLY_USER_DATA_DIR");
 
   return {
     dataDir,
@@ -102,6 +111,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       variations: readString(env, "FIREFLY_VARIATIONS_URL") ?? baseUrl,
       video: readString(env, "FIREFLY_VIDEO_URL") ?? `${baseUrl}/generate/video`,
     },
+    usePersistentProfile,
+    userDataDir,
   };
 }
 

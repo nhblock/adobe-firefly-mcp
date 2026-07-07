@@ -166,12 +166,28 @@ export class BrowserManager {
       ensureDirectory(this.config.downloadsDir),
     ]);
 
+    const useRealChrome = this.config.usePersistentProfile && this.config.userDataDir;
+
     this.logger.info("Launching persistent Chromium context", {
       headless: this.config.headless,
-      profileDir: this.config.profileDir,
+      profileDir: useRealChrome ? this.config.userDataDir : this.config.profileDir,
+      useRealChrome,
     });
 
     try {
+      if (useRealChrome && this.config.userDataDir) {
+        // Launch using real Chrome with user's existing profile
+        return await chromium.launchPersistentContext(this.config.userDataDir, {
+          channel: "chrome",
+          acceptDownloads: true,
+          downloadsPath: this.config.downloadsDir,
+          headless: false, // Force headed mode for real Chrome
+          slowMo: this.config.launchSlowMoMs,
+          viewport: { height: 1000, width: 1440 },
+        });
+      }
+
+      // Default: Launch using bundled Chromium
       return await chromium.launchPersistentContext(this.config.profileDir, {
         acceptDownloads: true,
         downloadsPath: this.config.downloadsDir,

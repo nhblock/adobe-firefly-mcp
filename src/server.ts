@@ -17,6 +17,7 @@ import { type ToolDeps } from "./tools/shared.js";
 import { registerDebugBundleTool } from "./tools/debugBundleTool.js";
 import { registerStatusTool } from "./tools/status.js";
 import { registerValidateEnvironmentTool } from "./tools/validateEnvironmentTool.js";
+import { registerVerifyEnvironmentTool } from "./tools/verifyEnvironment.js";
 import { registerVariationsTool } from "./tools/variations.js";
 
 export interface ServerRuntime {
@@ -44,6 +45,7 @@ export function createRuntime(config = loadConfig()): ServerRuntime {
   registerDomWatchTool(server, deps);
   registerDebugBundleTool(server, deps);
   registerValidateEnvironmentTool(server, deps);
+  registerVerifyEnvironmentTool(server, deps);
   registerGenerateTool(server, deps);
   registerGenerateVideoTool(server, deps);
   registerVariationsTool(server, deps);

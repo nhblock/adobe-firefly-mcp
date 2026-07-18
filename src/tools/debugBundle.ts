@@ -26,9 +26,7 @@ import {
 } from "../firefly/dom/artifacts.js";
 import { ensureDirectory } from "../utils/filesystem.js";
 
-export interface DebugBundleInput {
-  url?: string;
-}
+export type DebugBundleInput = Record<string, never>;
 
 export interface DebugBundleResult {
   bundleDir: string;
@@ -86,6 +84,7 @@ export async function runDebugBundle(
   logger: Logger,
   input: DebugBundleInput,
 ): Promise<DebugBundleResult> {
+  void input;
   const warnings: string[] = [];
   const files: string[] = [];
 
@@ -97,7 +96,7 @@ export async function runDebugBundle(
 
   logger.info("Starting debug bundle capture", { bundleDir });
 
-  const page = await browser.getPage(input.url);
+  const page = await browser.getPage();
   const context = await browser.getContext();
   browser.ensureListeners(page);
 

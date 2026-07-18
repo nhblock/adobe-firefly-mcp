@@ -16,6 +16,7 @@ It does not use a private Adobe API, automate login credentials, bypass authenti
 - `firefly_expand` - upload a local image and run Firefly's expand/outpaint workflow.
 - `firefly_remove_background` - upload a local image and run Firefly's remove-background workflow.
 - `firefly_status` - open/check the persistent browser profile, auth state, paths, and optional screenshot.
+- `firefly_verify_environment` - read-only verification of the current live Firefly page, including authentication and visible account/credit details.
 - `firefly_dom_inspect` - inspect the current DOM state for debugging automation issues.
 - `firefly_dom_watch` - watch for DOM mutations in real-time.
 - `firefly_debug_bundle` - capture comprehensive debug bundle with 26+ diagnostic files.
@@ -82,6 +83,11 @@ On Windows, use escaped backslashes or forward slashes in JSON paths:
 3. A Chromium window opens at Adobe Firefly.
 4. Sign in manually with your Adobe account.
 5. Run `firefly_status` again. The same profile in `profile/` will be reused.
+
+`firefly_status`, `firefly_verify_environment`, `firefly_validate_environment`,
+`firefly_debug_bundle`, and the generation tools share the same in-memory
+`BrowserManager`, `BrowserContext`, and live `Page` for the lifetime of one MCP
+server process. The diagnostic tools do not navigate an already-open page.
 
 The default browser mode is headed (`FIREFLY_HEADLESS=false`) because the first sign-in must be done by you.
 

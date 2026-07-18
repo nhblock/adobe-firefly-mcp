@@ -3,7 +3,7 @@ import path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { detectAuthState, dismissKnownDialogs } from "../firefly/wait.js";
+import { detectAuthState } from "../firefly/wait.js";
 import { ensureDirectory, timestampedBasename } from "../utils/filesystem.js";
 import { jsonToolResult, type ToolDeps, withToolErrors } from "./shared.js";
 
@@ -11,7 +11,9 @@ const statusInputShape = {
   openBrowser: z
     .boolean()
     .default(true)
-    .describe("Open the persistent browser and navigate to Firefly."),
+    .describe(
+      "Open the persistent browser if needed; never navigate an existing page.",
+    ),
   screenshot: z
     .boolean()
     .default(false)
@@ -43,8 +45,7 @@ export function registerStatusTool(server: McpServer, deps: ToolDeps): void {
           });
         }
 
-        const page = await deps.browser.getPage(deps.config.urls.base);
-        await dismissKnownDialogs(page, deps.config);
+        const page = await deps.browser.getPage();
 
         const authState = await detectAuthState(page, deps.config);
         const title = await page.title().catch(() => "");

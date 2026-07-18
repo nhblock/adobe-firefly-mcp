@@ -12,9 +12,11 @@ import { ensureDirectory } from "./utils/filesystem.js";
 import { RingBuffer } from "./utils/ringBuffer.js";
 
 export interface BrowserStatus {
+  contextLaunches: number;
   downloadsDir: string;
   headless: boolean;
   isRunning: boolean;
+  livePageId?: number;
   pages: number;
   profileDir: string;
 }
@@ -38,7 +40,11 @@ const BUFFER_CAPACITY = 500;
 
 export class BrowserManager {
   private contextPromise: Promise<BrowserContext> | undefined;
+  private contextLaunches = 0;
   private readonly consoleBuffer = new RingBuffer<ConsoleEntry>(BUFFER_CAPACITY);
+  private livePage: Page | undefined;
+  private readonly pageIds = new WeakMap<Page, number>();
+  private nextPageId = 1;
   private readonly networkBuffer = new RingBuffer<NetworkEntry>(BUFFER_CAPACITY);
   private readonly requestTimes = new Map<string, number>();
   private readonly listenersInstalled = new WeakSet<Page>();
@@ -55,7 +61,15 @@ export class BrowserManager {
 
   public async getPage(url?: string): Promise<Page> {
     const context = await this.getContext();
-    const page = context.pages()[0] ?? (await context.newPage());
+    const page =
+      (this.livePage !== undefined && !this.livePage.isClosed()
+        ? this.livePage
+        : context.pages().find((candidate) => !candidate.isClosed())) ??
+      (await context.newPage());
+    this.livePage = page;
+    if (!this.pageIds.has(page)) {
+      this.pageIds.set(page, this.nextPageId++);
+    }
     page.setDefaultTimeout(this.config.operationTimeoutMs);
     page.setDefaultNavigationTimeout(this.config.navigationTimeoutMs);
 
@@ -68,6 +82,29 @@ export class BrowserManager {
 
     await page.bringToFront().catch(() => undefined);
     this.ensureListeners(page);
+    return page;
+  }
+
+  /**
+   * Returns the current page without launching a browser, creating a context,
+   * or navigating. Runtime diagnostics should prefer this when a session is
+   * already active.
+   */
+  public async getLivePage(): Promise<Page | undefined> {
+    const context = await this.contextPromise?.catch(() => undefined);
+    if (context === undefined) return undefined;
+
+    if (this.livePage !== undefined && !this.livePage.isClosed()) {
+      return this.livePage;
+    }
+
+    const page = context.pages().find((candidate) => !candidate.isClosed());
+    if (page !== undefined) {
+      this.livePage = page;
+      if (!this.pageIds.has(page)) {
+        this.pageIds.set(page, this.nextPageId++);
+      }
+    }
     return page;
   }
 
@@ -142,10 +179,13 @@ export class BrowserManager {
 
   public async status(): Promise<BrowserStatus> {
     const context = await this.contextPromise?.catch(() => undefined);
+    const page = await this.getLivePage();
     return {
+      contextLaunches: this.contextLaunches,
       downloadsDir: this.config.downloadsDir,
       headless: this.config.headless,
       isRunning: context !== undefined,
+      livePageId: page === undefined ? undefined : this.pageIds.get(page),
       pages: context?.pages().length ?? 0,
       profileDir: this.config.profileDir,
     };
@@ -158,6 +198,7 @@ export class BrowserManager {
     if (context !== undefined) {
       await context.close();
     }
+    this.livePage = undefined;
   }
 
   private async launch(): Promise<BrowserContext> {
@@ -177,24 +218,31 @@ export class BrowserManager {
     try {
       if (useRealChrome && this.config.userDataDir) {
         // Launch using real Chrome with user's existing profile
-        return await chromium.launchPersistentContext(this.config.userDataDir, {
-          channel: "chrome",
-          acceptDownloads: true,
-          downloadsPath: this.config.downloadsDir,
-          headless: false, // Force headed mode for real Chrome
-          slowMo: this.config.launchSlowMoMs,
-          viewport: { height: 1000, width: 1440 },
-        });
+        const context = await chromium.launchPersistentContext(
+          this.config.userDataDir,
+          {
+            channel: "chrome",
+            acceptDownloads: true,
+            downloadsPath: this.config.downloadsDir,
+            headless: false, // Force headed mode for real Chrome
+            slowMo: this.config.launchSlowMoMs,
+            viewport: { height: 1000, width: 1440 },
+          },
+        );
+        this.contextLaunches += 1;
+        return context;
       }
 
       // Default: Launch using bundled Chromium
-      return await chromium.launchPersistentContext(this.config.profileDir, {
+      const context = await chromium.launchPersistentContext(this.config.profileDir, {
         acceptDownloads: true,
         downloadsPath: this.config.downloadsDir,
         headless: this.config.headless,
         slowMo: this.config.launchSlowMoMs,
         viewport: { height: 1000, width: 1440 },
       });
+      this.contextLaunches += 1;
+      return context;
     } catch (error) {
       this.contextPromise = undefined;
       this.logger.error("Failed to launch Chromium", { error });

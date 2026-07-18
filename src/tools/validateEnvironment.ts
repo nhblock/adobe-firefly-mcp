@@ -27,10 +27,11 @@ export async function validateEnvironment(
   browser: BrowserManager,
   config: AppConfig,
   logger: Logger,
-  options: { url?: string } = {},
+  _options: Record<string, never> = {},
 ): Promise<EnvironmentValidation> {
+  void _options;
   const checks: EnvironmentCheck[] = [];
-  const page = await browser.getPage(options.url);
+  const page = await browser.getPage();
 
   logger.info("Starting environment validation", { url: page.url() });
 

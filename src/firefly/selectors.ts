@@ -300,8 +300,23 @@ export const selectors = {
     download: [
       {
         kind: "css" as const,
-        name: "video download testid",
-        selector: '[data-testid="generate-video-download-button"]',
+        name: "media timeline download testid",
+        selector: '[data-testid="firefly-media-timeline-download-button"]',
+      },
+      {
+        kind: "css" as const,
+        name: "download video aria",
+        selector: '[aria-label="Download Video"]',
+      },
+      {
+        kind: "css" as const,
+        name: "sp-action-button download",
+        selector: 'sp-action-button[aria-label*="Download"]',
+      },
+      {
+        kind: "css" as const,
+        name: "download video container",
+        selector: ".download-video-container",
       },
       {
         kind: "role" as const,

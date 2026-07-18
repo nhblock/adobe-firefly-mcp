@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { loadConfig } from "../src/config.js";
+import { classifyVideoApi } from "../src/firefly/video.js";
 import { selectorGroups } from "../src/firefly/selectors.js";
 
 describe("video generation", () => {
@@ -111,6 +112,60 @@ describe("video generation", () => {
       expect(result.prompt).toBe("A cat dancing in the rain");
       expect(result.aspectRatio).toBe("Widescreen (16:9)");
       expect(result.model).toBe("Veo 3.1");
+    });
+  });
+
+  describe("classifyVideoApi", () => {
+    it("treats 2xx as accepted", () => {
+      expect(classifyVideoApi({ status: 200 }).kind).toBe("accepted");
+      expect(classifyVideoApi({ status: 202 }).kind).toBe("accepted");
+    });
+
+    it("treats 408/503 as transient", () => {
+      expect(classifyVideoApi({ status: 408 }).kind).toBe("transient");
+      expect(classifyVideoApi({ status: 503 }).kind).toBe("transient");
+    });
+
+    it("treats timeout_error code as transient", () => {
+      expect(classifyVideoApi({ status: 500, errorCode: "timeout_error" }).kind).toBe(
+        "transient",
+      );
+    });
+
+    it("treats 'system under load' body as transient", () => {
+      const verdict = classifyVideoApi({
+        status: 500,
+        apiMessage: "System under load, try again",
+      });
+      expect(verdict.kind).toBe("transient");
+    });
+
+    it("treats 429 as transient", () => {
+      expect(classifyVideoApi({ status: 429 }).kind).toBe("transient");
+    });
+
+    it("treats 401/403 as auth", () => {
+      expect(classifyVideoApi({ status: 401 }).kind).toBe("auth");
+      expect(classifyVideoApi({ status: 403 }).kind).toBe("auth");
+    });
+
+    it("treats moderation signals as moderation", () => {
+      expect(
+        classifyVideoApi({ status: 400, apiMessage: "content not allowed" }).kind,
+      ).toBe("moderation");
+      expect(
+        classifyVideoApi({ status: 400, errorCode: "policy_violation" }).kind,
+      ).toBe("moderation");
+    });
+
+    it("falls back to error for unrecognized failures", () => {
+      const verdict = classifyVideoApi({
+        status: 400,
+        errorCode: "bad_request",
+        apiMessage: "malformed payload",
+      });
+      expect(verdict.kind).toBe("error");
+      expect(verdict.message).toContain("400");
     });
   });
 });

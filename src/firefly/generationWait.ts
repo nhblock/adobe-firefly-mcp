@@ -45,39 +45,14 @@ const FIREFOX_ERROR_PATTERNS: Array<{
     label: "Unable to generate",
   },
   {
-    pattern: /failed to generate/i,
-    status: "firefly_error",
-    label: "Failed to generate",
+    // Match only genuine credit-depletion messages. The account menu shows a
+    // permanent "Get Credits" upsell button whose text must NOT be treated as a
+    // generation failure — it is present even during a successful generation.
+    pattern:
+      /not enough credits|out of credits|no (more )?credits?|credits? (required|needed|exhausted|depleted|remaining|left)|insufficient credits|purchase (more )?credits/i,
+    status: "credit_error",
+    label: "Credit issue",
   },
-  { pattern: /server error/i, status: "firefly_error", label: "Server error" },
-  { pattern: /network error/i, status: "firefly_error", label: "Network error" },
-  {
-    pattern: /generation failed/i,
-    status: "firefly_error",
-    label: "Generation failed",
-  },
-  {
-    pattern: /could not generate/i,
-    status: "firefly_error",
-    label: "Could not generate",
-  },
-  { pattern: /error occurred/i, status: "firefly_error", label: "Error occurred" },
-  { pattern: /oops/i, status: "firefly_error", label: "Oops" },
-  { pattern: /moderat/i, status: "moderation_error", label: "Content moderation" },
-  { pattern: /violat/i, status: "moderation_error", label: "Content policy violation" },
-  { pattern: /not allowed/i, status: "moderation_error", label: "Content not allowed" },
-  {
-    pattern: /inappropriate/i,
-    status: "moderation_error",
-    label: "Inappropriate content",
-  },
-  {
-    pattern: /sign.?in|log.?in/i,
-    status: "auth_error",
-    label: "Authentication required",
-  },
-  { pattern: /session.?expired/i, status: "auth_error", label: "Session expired" },
-  { pattern: /credit/i, status: "credit_error", label: "Credit issue" },
   { pattern: /quota/i, status: "credit_error", label: "Quota exceeded" },
   { pattern: /limit.?reached/i, status: "credit_error", label: "Limit reached" },
   {
@@ -269,7 +244,6 @@ async function detectErrorIndicators(page: Page): Promise<string[]> {
     'div:has-text("violation")',
     'div:has-text("not allowed")',
     'div:has-text("inappropriate")',
-    'div:has-text("credit")',
     'div:has-text("quota")',
     'div:has-text("limit")',
     'div:has-text("sign in")',

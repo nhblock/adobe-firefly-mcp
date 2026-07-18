@@ -1,6 +1,6 @@
 /**
  * Confidence-Based Authentication Detector
- * 
+ *
  * Replaces binary auth detection with a confidence scoring system.
  * Eliminates false positives from header "Sign in" buttons.
  */
@@ -21,7 +21,8 @@ export interface AuthCheckResult {
 
 export interface AuthConfidenceResult {
   score: number;
-  status: "authenticated" | "probably_authenticated" | "uncertain" | "not_authenticated";
+  status:
+    "authenticated" | "probably_authenticated" | "uncertain" | "not_authenticated";
   indicators: AuthCheckResult[];
   timestamp: string;
   url: string;
@@ -106,7 +107,7 @@ const SELECTORS = {
   credit_display: [
     '[data-testid*="credit"]',
     '[data-testid*="quota"]',
-    'text=/\\d+ credits?/',
+    "text=/\\d+ credits?/",
   ],
   full_screen_signin: [
     'div:has-text("Sign in to Adobe")',
@@ -220,9 +221,7 @@ function getStatus(
 /**
  * Main authentication detection function
  */
-export async function detectAuthConfidence(
-  page: Page,
-): Promise<AuthConfidenceResult> {
+export async function detectAuthConfidence(page: Page): Promise<AuthConfidenceResult> {
   const results: AuthCheckResult[] = [];
 
   // Check positive indicators

@@ -31,3 +31,16 @@ test-results/
 *.tgz
 Thumbs.db
 .DS_Store
+
+# Local debug captures (may contain auth cookies/session data) and scratch scripts
+debug/
+*.out
+*.err
+account-menu.ts
+dl-probe.ts
+identity.ts
+one-shot-video-test.ts
+open-browser.ts
+run-gen.ts
+verify-env.ts
+video-probe.ts

@@ -1,6 +1,6 @@
 {
   "name": "adobe-firefly-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local MCP server that drives Adobe Firefly through a persistent Playwright browser session.",
   "type": "module",
   "bin": {

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] — First public release
+
 ### Added
 
 - `firefly_generate_video` — prompt-to-video generation (Veo, Kling, and the
@@ -31,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the `core-video` source when Firefly emits no Playwright download event.
 - Credit-error detection no longer misreads the persistent "Get Credits" upsell
   button as a generation failure.
+- Normalized the `bin` path to `dist/server.js` so npm preserves the
+  `adobe-firefly-mcp` CLI entry when publishing.
 
 ### Changed
 
@@ -39,10 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0]
 
-Initial internal release: MCP server driving Adobe Firefly through a persistent
+Initial (unpublished) release tag. Superseded by 0.1.1, which is the first
+version published to npm. MCP server driving Adobe Firefly through a persistent
 Playwright browser session, with image generation, variations, expand,
 remove-background, DOM inspection, debug bundles, environment validation, and a
 self-healing selector engine.
 
-[Unreleased]: https://github.com/peroxide-dev/adobe-firefly-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/peroxide-dev/adobe-firefly-mcp/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/peroxide-dev/adobe-firefly-mcp/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/peroxide-dev/adobe-firefly-mcp/releases/tag/v0.1.0

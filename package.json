@@ -4,7 +4,7 @@
   "description": "Local MCP server that drives Adobe Firefly through a persistent Playwright browser session.",
   "type": "module",
   "bin": {
-    "adobe-firefly-mcp": "./dist/server.js"
+    "adobe-firefly-mcp": "dist/server.js"
   },
   "files": [
     "dist",

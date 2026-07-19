@@ -653,9 +653,7 @@ export async function generateVideo(
         await page.waitForTimeout(250);
       }
       if (!enabled) {
-        throw new Error(
-          "download button did not become enabled within 15000ms",
-        );
+        throw new Error("download button did not become enabled within 15000ms");
       }
       diag(`Download button enabled after ${Date.now() - enableStart}ms`);
 

@@ -18,20 +18,31 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
+    "install:browser": "playwright install chromium",
     "start": "node dist/server.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "keywords": [
     "mcp",
+    "model-context-protocol",
     "claude",
     "claude-code",
     "adobe-firefly",
     "playwright",
-    "image-generation"
+    "image-generation",
+    "video-generation"
   ],
-  "author": "",
+  "author": "Anik",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/peroxide-dev/adobe-firefly-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/peroxide-dev/adobe-firefly-mcp/issues"
+  },
+  "homepage": "https://github.com/peroxide-dev/adobe-firefly-mcp#readme",
   "engines": {
     "node": ">=20.11"
   },

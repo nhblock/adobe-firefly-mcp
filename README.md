@@ -1,10 +1,49 @@
 # adobe-firefly-mcp
 
+[![CI](https://github.com/peroxide-dev/adobe-firefly-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/peroxide-dev/adobe-firefly-mcp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20.11-brightgreen.svg)](https://nodejs.org/)
+
 Local MCP server for using Adobe Firefly from Claude Code through Playwright browser automation.
 
 This project is designed for a personal local workflow where you already have access to Adobe Firefly in your browser. It launches a persistent Playwright Chromium profile, lets you sign in manually once, then reuses that profile for future image workflows.
 
 It does not use a private Adobe API, automate login credentials, bypass authentication, or store credentials outside the browser profile.
+
+## Features
+
+- **Image generation** — prompt-to-image with aspect ratio, style, and count.
+- **Video generation** — prompt-to-video via Veo, Kling, and the first-party Firefly Video model, with reliable download handling.
+- **Image editing** — variations, generative expand/outpaint, and background removal from local images.
+- **Persistent Adobe session** — sign in once; the profile is reused across restarts.
+- **Resilient automation** — ordered selectors, environment overrides, and a self-healing engine that recovers when Adobe changes the UI.
+- **Deep debugging tools** — DOM inspection, real-time mutation watching, and a 26+ file diagnostic bundle.
+- **Typed error classification** — auth, moderation, credit, and transient backend errors are reported distinctly instead of as opaque timeouts.
+
+## Quick Start
+
+```bash
+# 1. Clone and install
+git clone https://github.com/peroxide-dev/adobe-firefly-mcp.git
+cd adobe-firefly-mcp
+npm install
+
+# 2. Install the Chromium build Playwright drives
+npm run install:browser
+
+# 3. Build
+npm run build
+```
+
+Then add the server to your MCP client (see [Claude Code Configuration](#claude-code-configuration)) and complete the one-time [First Run](#first-run) sign-in. Total time: a few minutes.
+
+## Documentation
+
+- [MCP Tools Reference](MCP_TOOLS.md) — every tool and its parameters
+- [Architecture](ARCHITECTURE.md) — how the server is put together
+- [Security Policy](SECURITY.md) — session storage and safe handling of `profile/`
+- [Contributing](CONTRIBUTING.md) — dev setup and quality bar
+- [Changelog](CHANGELOG.md) — release history
 
 ## Tools
 
@@ -30,6 +69,7 @@ From source:
 
 ```bash
 npm install
+npm run install:browser   # downloads the Chromium build Playwright drives
 npm run build
 ```
 
@@ -37,7 +77,15 @@ When published to npm:
 
 ```bash
 npm install -g adobe-firefly-mcp
+npx playwright install chromium   # one-time browser download
 ```
+
+> **Chromium is required.** By default the server drives Playwright's bundled
+> Chromium, which is not downloaded automatically. Run `npm run install:browser`
+> (from source) or `npx playwright install chromium` (global install) once. If
+> you prefer to reuse your installed Google Chrome and its existing profile, set
+> `FIREFLY_USE_PERSISTENT_PROFILE=true` and `FIREFLY_USER_DATA_DIR` instead — see
+> [Configuration](#configuration).
 
 ## Claude Code Configuration
 
@@ -520,8 +568,51 @@ When automation fails:
 
 The debug bundle provides the most complete picture with 26+ diagnostic files, selector validation, automation health checks, and auth diagnostics.
 
+## Troubleshooting
+
+**"Executable doesn't exist" / browser fails to launch.**
+Playwright's Chromium isn't installed. Run `npm run install:browser` (from
+source) or `npx playwright install chromium` (global install).
+
+**A Chromium window never opens on first run.**
+The default mode is headed so you can sign in. Ensure `FIREFLY_HEADLESS` is not
+set to `true`, then run `firefly_status` with `openBrowser: true`.
+
+**Tools report `auth_error` or I'm asked to sign in repeatedly.**
+Your Adobe session expired or the profile wasn't reused. Run `firefly_status`
+with `openBrowser: true`, sign in again, and confirm the `profile/` path in the
+output matches across runs. Do not delete `profile/` between runs.
+
+**Generation returns `credit_error`.**
+Your Adobe plan is out of Firefly credits/quota. This is an account state, not a
+bug.
+
+**Automation broke after an Adobe UI change.**
+Adobe changed routes, labels, or structure. Run `firefly_debug_bundle` and
+`firefly_dom_inspect` to find new selectors, then set the relevant
+`FIREFLY_SELECTOR_*` or `FIREFLY_*_URL` overrides. The self-healing engine will
+also attempt automatic recovery.
+
+**Browser won't start: profile is locked.**
+Another instance is using the profile, or a previous run didn't exit cleanly.
+Close other Chromium instances using `profile/` and retry.
+
+**Nothing appears in the MCP client / protocol errors.**
+Logs go to **stderr**, never stdout (stdout is reserved for the MCP protocol).
+Check stderr and set `FIREFLY_LOG_LEVEL=debug` for more detail.
+
 ## Limitations
 
 This is browser automation over a consumer web UI, not an official Adobe API. It can break when Adobe changes routes, labels, or page structure. Use `firefly_status` and selector/URL environment overrides to diagnose and adapt.
 
 You are responsible for using Adobe Firefly in accordance with your Adobe plan and applicable terms.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and
+the quality bar, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). For security
+issues, follow [SECURITY.md](SECURITY.md) rather than opening a public issue.
+
+## License
+
+[MIT](LICENSE) © Anik

@@ -1,5 +1,7 @@
 # adobe-firefly-mcp
 
+[![npm version](https://img.shields.io/npm/v/adobe-firefly-mcp.svg)](https://www.npmjs.com/package/adobe-firefly-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/adobe-firefly-mcp.svg)](https://www.npmjs.com/package/adobe-firefly-mcp)
 [![CI](https://github.com/peroxide-dev/adobe-firefly-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/peroxide-dev/adobe-firefly-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.11-brightgreen.svg)](https://nodejs.org/)
@@ -22,6 +24,18 @@ It does not use a private Adobe API, automate login credentials, bypass authenti
 
 ## Quick Start
 
+Install from npm:
+
+```bash
+# 1. Install the server
+npm install -g adobe-firefly-mcp
+
+# 2. Install the Chromium build Playwright drives (one-time)
+npx playwright install chromium
+```
+
+Or build from source:
+
 ```bash
 # 1. Clone and install
 git clone https://github.com/peroxide-dev/adobe-firefly-mcp.git
@@ -39,11 +53,11 @@ Then add the server to your MCP client (see [Claude Code Configuration](#claude-
 
 ## Documentation
 
-- [MCP Tools Reference](MCP_TOOLS.md) — every tool and its parameters
-- [Architecture](ARCHITECTURE.md) — how the server is put together
-- [Security Policy](SECURITY.md) — session storage and safe handling of `profile/`
-- [Contributing](CONTRIBUTING.md) — dev setup and quality bar
-- [Changelog](CHANGELOG.md) — release history
+- [MCP Tools Reference](https://github.com/peroxide-dev/adobe-firefly-mcp/blob/main/MCP_TOOLS.md) — every tool and its parameters
+- [Architecture](https://github.com/peroxide-dev/adobe-firefly-mcp/blob/main/ARCHITECTURE.md) — how the server is put together
+- [Security Policy](https://github.com/peroxide-dev/adobe-firefly-mcp/blob/main/SECURITY.md) — session storage and safe handling of `profile/`
+- [Contributing](https://github.com/peroxide-dev/adobe-firefly-mcp/blob/main/CONTRIBUTING.md) — dev setup and quality bar
+- [Changelog](https://github.com/peroxide-dev/adobe-firefly-mcp/blob/main/CHANGELOG.md) — release history
 
 ## Tools
 
@@ -65,19 +79,27 @@ Generated files are saved locally and returned as absolute file paths.
 
 ## Install
 
+Published on npm as [`adobe-firefly-mcp`](https://www.npmjs.com/package/adobe-firefly-mcp).
+
+Global install (recommended):
+
+```bash
+npm install -g adobe-firefly-mcp
+npx playwright install chromium   # one-time browser download
+```
+
+Run without installing:
+
+```bash
+npx adobe-firefly-mcp
+```
+
 From source:
 
 ```bash
 npm install
 npm run install:browser   # downloads the Chromium build Playwright drives
 npm run build
-```
-
-When published to npm:
-
-```bash
-npm install -g adobe-firefly-mcp
-npx playwright install chromium   # one-time browser download
 ```
 
 > **Chromium is required.** By default the server drives Playwright's bundled

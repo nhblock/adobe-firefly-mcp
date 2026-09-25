@@ -187,15 +187,30 @@ export async function collectVisibleImageFingerprints(
   page: Page,
 ): Promise<Set<string>> {
   const fingerprints = await evaluateAcrossNavigation(page, () =>
-    Array.from(document.images)
+    // document.images misses the multi-model UI's results, which render in
+    // (open) shadow DOM. Kept inline: page.evaluate cannot see outer helpers.
+    (function allImages(root: Document | ShadowRoot): HTMLImageElement[] {
+      const found: HTMLImageElement[] = [];
+      for (const element of Array.from(root.querySelectorAll("*"))) {
+        if (element instanceof HTMLImageElement) {
+          found.push(element);
+        }
+        if (element.shadowRoot !== null) {
+          found.push(...allImages(element.shadowRoot));
+        }
+      }
+      return found;
+    })(document)
       .map((image) => {
         const rect = image.getBoundingClientRect();
         const src = image.currentSrc || image.src;
 
         if (
           src.length === 0 ||
-          rect.width < 128 ||
-          rect.height < 128 ||
+          // Wide results render as short thumbnails (16:9 at 225x125), so only
+          // the longer rendered side must reach 128px.
+          Math.max(rect.width, rect.height) < 128 ||
+          Math.min(rect.width, rect.height) < 48 ||
           image.naturalWidth < 128 ||
           image.naturalHeight < 128
         ) {

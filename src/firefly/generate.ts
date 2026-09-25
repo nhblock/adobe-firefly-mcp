@@ -13,7 +13,7 @@ import {
 } from "../utils/filesystem.js";
 import { downloadGeneratedImages, type DownloadedImage } from "./download.js";
 import { escapeRegExp, shortPromptLabel } from "./prompts.js";
-import { selectors } from "./selectors.js";
+import { selectors, type SelectorCandidate } from "./selectors.js";
 import { resolveLocator } from "./locatorResolver.js";
 import { captureDiagnostics } from "./diagnostics.js";
 import {
@@ -109,6 +109,18 @@ export async function runTextToImage(
     );
   }
 
+  // Filling the prompt can open a suggestion popup that swallows the next
+  // outside click, which would otherwise be the first option control.
+  await closePromptOverlays(page, config);
+  // Model first: the aspect ratios on offer depend on the model.
+  if (
+    config.imageModel !== undefined &&
+    !(await chooseImageModel(page, config.imageModel))
+  ) {
+    warnings.push(
+      `Could not select image model "${config.imageModel}"; generated with the page's current model.`,
+    );
+  }
   warnings.push(...(await applyOptionalControls(page, input)));
 
   const before = await collectVisibleImageFingerprints(page);
@@ -427,6 +439,7 @@ async function applyOptionalControls(
 
     const clicked =
       (label === "content class" && (await clickContentType(page, value))) ||
+      (label === "aspect ratio" && (await clickAspectRatio(page, value))) ||
       (await clickTextOption(page, value));
     if (!clicked) {
       warnings.push(
@@ -449,6 +462,70 @@ async function clickContentType(page: Page, value: string): Promise<boolean> {
     () => true,
     () => false,
   );
+}
+
+// Aspect ratio lives in a closed picker ("Square (1:1)"), so its options are not
+// visible until the picker is opened. A bare ratio matches its parenthesized
+// form, so "16:9" hits "Widescreen (16:9)" and "1:1" never hits "(21:1)".
+async function clickAspectRatio(page: Page, value: string): Promise<boolean> {
+  const label = /^\d+:\d+$/u.test(value.trim()) ? `(${value.trim()})` : value.trim();
+  // The multi-model UI renders Spectrum sp-menu-items with no ARIA role, so
+  // match them by text before trying role=option.
+  const option = page
+    .locator('[data-testid="aspect-ratio-picker"] sp-menu-item')
+    .filter({ hasText: label })
+    .or(page.getByRole("option", { name: value.trim(), exact: false }))
+    .first();
+  return choosePickerOption(page, selectors.image.aspectRatio, option);
+}
+
+// Exact label match, so "Firefly Image 4" never picks "Firefly Image 4 Ultra".
+async function chooseImageModel(page: Page, model: string): Promise<boolean> {
+  const option = page
+    .locator("sp-menu-item")
+    .filter({
+      hasText: new RegExp(`^\\s*${escapeRegExp(model.trim())}\\s*$`, "iu"),
+      visible: true,
+    })
+    .first();
+  return choosePickerOption(page, selectors.image.model, option);
+}
+
+async function choosePickerOption(
+  page: Page,
+  openers: SelectorCandidate[],
+  option: Locator,
+): Promise<boolean> {
+  let picker;
+  try {
+    picker = await resolveLocator(page, openers, {
+      timeout: 3_000,
+      log: () => undefined,
+    });
+  } catch {
+    return false;
+  }
+
+  // A prompt popup can swallow the first click on the picker (closing itself),
+  // so open it at most twice.
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const opened = await picker.locator
+      .click({ timeout: 2_000 })
+      .then(() => option.waitFor({ state: "visible", timeout: 2_000 }))
+      .then(
+        () => true,
+        () => false,
+      );
+    if (opened) {
+      return option.click({ timeout: 2_000 }).then(
+        () => true,
+        () => false,
+      );
+    }
+  }
+
+  await page.keyboard.press("Escape").catch(() => undefined);
+  return false;
 }
 
 async function clickTextOption(page: Page, value: string): Promise<boolean> {

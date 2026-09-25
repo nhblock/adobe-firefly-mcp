@@ -9,13 +9,15 @@ const generateInputShape = {
     .string()
     .trim()
     .optional()
-    .describe('Optional Firefly aspect ratio label, such as "1:1" or "16:9".'),
+    .describe(
+      'Optional aspect ratio, such as "16:9", "9:16", "4:3", or "1:1", or a full picker label like "Widescreen (16:9)".',
+    ),
   contentClass: z
     .string()
     .trim()
     .optional()
     .describe(
-      'Optional Firefly content type, such as "Photo" or "Art". Selected with the Firefly control; never added to the prompt text.',
+      'Optional Firefly content type, such as "Photo" or "Art". Only some models show this control (Firefly Image 4 and 3 do); otherwise ignored with a warning. Never added to the prompt text.',
     ),
   count: z
     .number()

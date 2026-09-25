@@ -69,7 +69,14 @@ export function locatorFor(root: LocatorRoot, candidate: SelectorCandidate): Loc
 
 export const selectors = {
   image: {
+    // /generate/image (multi-model UI) test ids come first; the rest cover the
+    // older /generate/images UI.
     aspectRatio: [
+      {
+        kind: "css" as const,
+        name: "aspect ratio size picker",
+        selector: '[data-testid="firefly-picker-size"]',
+      },
       {
         kind: "role" as const,
         name: "aspect ratio button",
@@ -87,6 +94,13 @@ export const selectors = {
         selector: '[aria-label*="aspect" i]',
       },
     ],
+    model: [
+      {
+        kind: "css" as const,
+        name: "model picker",
+        selector: '[data-testid="firefly-picker-model"]',
+      },
+    ],
     contentClass: [
       {
         kind: "role" as const,
@@ -96,6 +110,11 @@ export const selectors = {
       },
     ],
     generate: [
+      {
+        kind: "testId" as const,
+        name: "image generate button test id",
+        testId: "generate-image-generate-button",
+      },
       {
         kind: "testId" as const,
         name: "generate button test id",
@@ -134,6 +153,11 @@ export const selectors = {
       },
     ],
     prompt: [
+      {
+        kind: "css" as const,
+        name: "prompt container textarea",
+        selector: '[data-testid="firefly-prompt-container"] textarea',
+      },
       {
         kind: "css" as const,
         name: "prompt bar textarea",

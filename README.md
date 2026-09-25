@@ -444,6 +444,7 @@ All configuration is optional.
 | `FIREFLY_DOWNLOADS_DIR`               | `<dataDir>/downloads`            | Saved image output directory.                                          |
 | `FIREFLY_PROFILE_DIR`                 | `<dataDir>/profile`              | Persistent Chromium user data directory.                               |
 | `FIREFLY_HEADLESS`                    | `false`                          | Run Chromium headless after you have already signed in.                |
+| `FIREFLY_IMAGE_MODEL`                 | `Firefly Image 4`                | Image model to select. Firefly Image 4 uses no credits.                |
 | `FIREFLY_LOG_LEVEL`                   | `info`                           | `debug`, `info`, `warn`, `error`, or `silent`. Logs go to stderr only. |
 | `FIREFLY_MAX_DOWNLOADS`               | `4`                              | Default maximum generated images to save.                              |
 | `FIREFLY_OPERATION_TIMEOUT_MS`        | `180000`                         | General UI action timeout.                                             |
@@ -451,7 +452,7 @@ All configuration is optional.
 | `FIREFLY_GENERATION_START_TIMEOUT_MS` | `20000`                          | Wait for Firefly to start generating after each Generate click.        |
 | `FIREFLY_NAVIGATION_TIMEOUT_MS`       | `60000`                          | Page navigation timeout.                                               |
 | `FIREFLY_BASE_URL`                    | `https://firefly.adobe.com`      | Base Firefly URL.                                                      |
-| `FIREFLY_TEXT_TO_IMAGE_URL`           | `<base>/generate/images`         | Prompt-to-image route.                                                 |
+| `FIREFLY_TEXT_TO_IMAGE_URL`           | `<base>/generate/image`          | Prompt-to-image route (multi-model page).                              |
 | `FIREFLY_VARIATIONS_URL`              | `<base>`                         | Variations route.                                                      |
 | `FIREFLY_EXPAND_URL`                  | `<base>/tools/generative-expand` | Expand route.                                                          |
 | `FIREFLY_REMOVE_BACKGROUND_URL`       | `<base>/tools/remove-background` | Remove-background route.                                               |

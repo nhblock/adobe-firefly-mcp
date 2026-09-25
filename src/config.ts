@@ -28,6 +28,8 @@ export interface AppConfig {
   generationStartTimeoutMs: number;
   generationTimeoutMs: number;
   headless: boolean;
+  /** Model picked on the multi-model /generate/image UI; undefined keeps the page's choice. */
+  imageModel?: string;
   launchSlowMoMs: number;
   logLevel: LogLevel;
   maxDownloads: number;
@@ -45,6 +47,8 @@ const DEFAULT_GENERATION_TIMEOUT_MS = 300_000;
 const DEFAULT_GENERATION_START_TIMEOUT_MS = 20_000;
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_DOWNLOADS = 4;
+// Firefly Image 4 generates without spending generative credits on this plan.
+const DEFAULT_IMAGE_MODEL = "Firefly Image 4";
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const dataDir = resolveMaybeRelative(
@@ -86,6 +90,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       DEFAULT_GENERATION_TIMEOUT_MS,
     ),
     headless: readBoolean(env, "FIREFLY_HEADLESS", false),
+    imageModel: readString(env, "FIREFLY_IMAGE_MODEL") ?? DEFAULT_IMAGE_MODEL,
     launchSlowMoMs: readInteger(env, "FIREFLY_SLOW_MO_MS", 0),
     logLevel: readLogLevel(env, "FIREFLY_LOG_LEVEL", "info"),
     maxDownloads: readInteger(env, "FIREFLY_MAX_DOWNLOADS", DEFAULT_MAX_DOWNLOADS),
@@ -114,7 +119,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         readString(env, "FIREFLY_REMOVE_BACKGROUND_URL") ??
         `${baseUrl}/tools/remove-background`,
       textToImage:
-        readString(env, "FIREFLY_TEXT_TO_IMAGE_URL") ?? `${baseUrl}/generate/images`,
+        readString(env, "FIREFLY_TEXT_TO_IMAGE_URL") ?? `${baseUrl}/generate/image`,
       variations: readString(env, "FIREFLY_VARIATIONS_URL") ?? baseUrl,
       video: readString(env, "FIREFLY_VIDEO_URL") ?? `${baseUrl}/generate/video`,
     },

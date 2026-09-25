@@ -94,7 +94,21 @@ async function markNewImages(
       const seen = new Set<string>();
       let count = 0;
 
-      for (const image of Array.from(document.images)) {
+      // Same shadow-piercing scan as collectVisibleImageFingerprints.
+      const allImages = (root: Document | ShadowRoot): HTMLImageElement[] => {
+        const found: HTMLImageElement[] = [];
+        for (const element of Array.from(root.querySelectorAll("*"))) {
+          if (element instanceof HTMLImageElement) {
+            found.push(element);
+          }
+          if (element.shadowRoot !== null) {
+            found.push(...allImages(element.shadowRoot));
+          }
+        }
+        return found;
+      };
+
+      for (const image of allImages(document)) {
         image.removeAttribute(attribute);
         const rect = image.getBoundingClientRect();
         const src = image.currentSrc || image.src;
@@ -104,8 +118,10 @@ async function markNewImages(
           src.length === 0 ||
           beforeSet.has(fingerprint) ||
           seen.has(fingerprint) ||
-          rect.width < 128 ||
-          rect.height < 128 ||
+          // Wide results render as short thumbnails (16:9 at 225x125), so only
+          // the longer rendered side must reach 128px.
+          Math.max(rect.width, rect.height) < 128 ||
+          Math.min(rect.width, rect.height) < 48 ||
           image.naturalWidth < 128 ||
           image.naturalHeight < 128
         ) {

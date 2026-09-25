@@ -21,7 +21,9 @@ import type { Logger } from "../src/logger.js";
 // - results from a previous run are already on the page, and their rendered
 //   size changes when the popup closes (a pure layout shift);
 // - each tile's download button only shows on hover and matches several of the
-//   generic download selectors at once, and a "Download all" button exists.
+//   generic download selectors at once, and a "Download all" button exists;
+// - the aspect ratio (multi-model /generate/image UI) is a closed picker whose
+//   options are role-less sp-menu-items in shadow DOM, shown only once opened.
 const FAKE_FIREFLY_HTML = String.raw`<!doctype html>
 <html><head><style>
   body { font-family: sans-serif; margin: 0; }
@@ -29,6 +31,7 @@ const FAKE_FIREFLY_HTML = String.raw`<!doctype html>
   .tile { position: relative; }
   .tile img { width: 256px; height: 256px; display: block; }
   body.tall .tile img { width: 240px; height: 240px; }
+  .wide .tile img, body.tall .wide .tile img { width: 225px; height: 125px; }
   .tile .dl { display: none; position: absolute; top: 8px; right: 8px; }
   .tile:hover .dl { display: block; }
   #popup { position: fixed; bottom: 200px; left: 0; right: 0; background: #eee; }
@@ -43,6 +46,8 @@ const FAKE_FIREFLY_HTML = String.raw`<!doctype html>
     <firefly-prompt data-testid="prompt-bar-input" placeholder="Describe the image you want to generate"></firefly-prompt>
     <button data-testid="content-type-art">Art</button>
     <button data-testid="content-type-photo">Photo</button>
+    <firefly-picker data-testid="model-picker"></firefly-picker>
+    <firefly-picker data-testid="aspect-ratio-picker"></firefly-picker>
     <button data-testid="generate-button">Generate</button>
   </div>
   <div id="coach" role="dialog">Start generating images <button>OK</button></div>
@@ -65,8 +70,52 @@ const FAKE_FIREFLY_HTML = String.raw`<!doctype html>
     get value() { return this.shadowRoot.querySelector("textarea")?.value ?? ""; }
   }
   customElements.define("firefly-prompt", FireflyPrompt);
+  window.aspectRatio = "Square (1:1)";
+  window.model = "Gemini 3.1 (Nano Banana 2)";
+  const pickers = {
+    "aspect-ratio-picker": {
+      opener: "firefly-picker-size", setting: "aspectRatio",
+      options: ["Ultra Wide (21:9)", "Widescreen (16:9)", "Square (1:1)", "Vertical (9:16)"],
+    },
+    // Like the live page: "Image 4 Ultra" is listed before "Image 4", and a
+    // hidden duplicate menu of the same items exists elsewhere in the DOM.
+    "model-picker": {
+      opener: "firefly-picker-model", setting: "model",
+      options: ["Firefly Image 5", "Firefly Image 4 Ultra", "Firefly Image 4", "Gemini 3.1 (Nano Banana 2)"],
+      hiddenDuplicate: true,
+    },
+  };
+  class FireflyPicker extends HTMLElement {
+    connectedCallback() {
+      const spec = pickers[this.dataset.testid];
+      const root = this.attachShadow({ mode: "open" });
+      const items = spec.options
+        .map((label) => '<sp-menu-item style="display:block">' + label + '</sp-menu-item>').join("");
+      root.innerHTML = '<button data-testid="' + spec.opener + '">' + window[spec.setting] + '</button>' +
+        (spec.hiddenDuplicate ? '<div class="dup" hidden>' + items + '</div>' : '') +
+        '<div class="menu" hidden>' + items + '</div>';
+      const menu = root.querySelector(".menu");
+      root.querySelector("button").addEventListener("click", () => { menu.hidden = false; });
+      for (const item of menu.querySelectorAll("sp-menu-item")) {
+        item.addEventListener("click", () => {
+          window[spec.setting] = item.textContent;
+          root.querySelector("button").textContent = item.textContent;
+          menu.hidden = true;
+        });
+      }
+    }
+  }
+  customElements.define("firefly-picker", FireflyPicker);
   const promptBox = document.querySelector("firefly-prompt");
-  const results = document.getElementById("results");
+  // The multi-model UI renders results inside shadow DOM.
+  const resultsHost = document.getElementById("results");
+  const results = window.shadowResults ? resultsHost.attachShadow({ mode: "open" }) : resultsHost;
+  if (window.shadowResults) {
+    // Page styles do not reach into shadow DOM; the tiles need their own.
+    const style = document.createElement("style");
+    style.textContent = [...document.querySelectorAll("style")].map((el) => el.textContent).join(" ");
+    results.appendChild(style);
+  }
 
   function tileImage(label) {
     const canvas = document.createElement("canvas");
@@ -85,17 +134,26 @@ const FAKE_FIREFLY_HTML = String.raw`<!doctype html>
     document.body.appendChild(a); a.click(); a.remove();
   }
 
+  function dataUrlToBlobUrl(dataUrl) {
+    const bytes = Uint8Array.from(atob(dataUrl.split(",")[1]), (c) => c.charCodeAt(0));
+    return URL.createObjectURL(new Blob([bytes], { type: "image/png" }));
+  }
+
   function addGroup(tag) {
     const group = document.createElement("div");
-    group.className = "group";
+    group.className = window.wideThumbs ? "group wide" : "group";
     for (let i = 0; i < 4; i += 1) {
       const src = tileImage(tag + "-" + i);
       const tile = document.createElement("div");
       tile.className = "tile";
       tile.innerHTML = '<img alt="">' +
         '<button class="dl" aria-label="Download" data-testid="tile-download">Download</button>';
-      tile.querySelector("img").src = src;
-      tile.querySelector(".dl").addEventListener("click", () => downloadDataUrl(src, "Firefly " + tag + " " + i + ".png"));
+      // The multi-model UI shows full-size results as blob: URLs, and its
+      // Download button does not start a plain browser download.
+      tile.querySelector("img").src = window.blobResults ? dataUrlToBlobUrl(src) : src;
+      tile.querySelector(".dl").addEventListener("click", () => {
+        if (!window.blobResults) downloadDataUrl(src, "Firefly " + tag + " " + i + ".png");
+      });
       group.appendChild(tile);
     }
     results.prepend(group);
@@ -152,6 +210,9 @@ let tempDir: string;
 async function openFakeFirefly(options: {
   escapeClosesPopup?: boolean;
   generateDoesNothing?: boolean;
+  shadowResults?: boolean;
+  blobResults?: boolean;
+  wideThumbs?: boolean;
 }): Promise<void> {
   page = await browser.newPage({
     acceptDownloads: true,
@@ -242,6 +303,95 @@ describe("runTextToImage against a fake Firefly page", () => {
       ),
     ).toBe(1);
     expect(result.files).toHaveLength(2);
+  }, 60_000);
+
+  it("opens the aspect ratio picker and picks the option matching a bare ratio", async () => {
+    await openFakeFirefly({});
+
+    const result = await runTextToImage(fakeBrowserManager(), config, silentLogger, {
+      aspectRatio: "16:9",
+      count: 1,
+      prompt: "A yellow smiley face riding a horse",
+    });
+
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { aspectRatio: string }).aspectRatio,
+      ),
+    ).toBe("Widescreen (16:9)");
+    expect(result.warnings.join(" ")).not.toMatch(/aspect ratio/u);
+  }, 60_000);
+
+  it("sets the aspect ratio even when the prompt popup ignores Escape", async () => {
+    await openFakeFirefly({ escapeClosesPopup: false });
+
+    await runTextToImage(fakeBrowserManager(), config, silentLogger, {
+      aspectRatio: "9:16",
+      count: 1,
+      prompt: "A yellow smiley face riding a horse",
+    });
+
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { aspectRatio: string }).aspectRatio,
+      ),
+    ).toBe("Vertical (9:16)");
+  }, 60_000);
+
+  it("selects the default image model by its exact label", async () => {
+    await openFakeFirefly({});
+
+    const result = await runTextToImage(fakeBrowserManager(), config, silentLogger, {
+      count: 1,
+      prompt: "A yellow smiley face riding a horse",
+    });
+
+    expect(
+      await page.evaluate(() => (window as unknown as { model: string }).model),
+    ).toBe("Firefly Image 4");
+    expect(result.warnings.join(" ")).not.toMatch(/image model/u);
+  }, 60_000);
+
+  it("finds and saves results rendered inside shadow DOM", async () => {
+    await openFakeFirefly({ shadowResults: true });
+
+    const result = await runTextToImage(fakeBrowserManager(), config, silentLogger, {
+      count: 4,
+      prompt: "A yellow smiley face riding a horse",
+    });
+
+    expect(result.files).toHaveLength(4);
+    const hashes = await Promise.all(result.files.map((file) => sha256(file.path)));
+    expect(new Set(hashes).size).toBe(4);
+  }, 60_000);
+
+  it("saves blob: results from the image itself without waiting on Download", async () => {
+    await openFakeFirefly({ blobResults: true, shadowResults: true });
+
+    const startedAt = Date.now();
+    const result = await runTextToImage(fakeBrowserManager(), config, silentLogger, {
+      count: 4,
+      prompt: "A yellow smiley face riding a horse",
+    });
+
+    expect(result.files).toHaveLength(4);
+    expect(result.files.every((file) => file.source === "image-src")).toBe(true);
+    const hashes = await Promise.all(result.files.map((file) => sha256(file.path)));
+    expect(new Set(hashes).size).toBe(4);
+    // Waiting on the Download button costs 15s per tile before falling back.
+    expect(Date.now() - startedAt).toBeLessThan(30_000);
+  }, 180_000);
+
+  it("detects 16:9 results whose thumbnails render shorter than 128px", async () => {
+    // The multi-model UI shows 16:9 results as 225x125 thumbnails.
+    await openFakeFirefly({ shadowResults: true, wideThumbs: true });
+
+    const result = await runTextToImage(fakeBrowserManager(), config, silentLogger, {
+      count: 4,
+      prompt: "A yellow smiley face riding a horse",
+    });
+
+    expect(result.files).toHaveLength(4);
   }, 60_000);
 
   it("fails clearly instead of returning old images when Generate never starts", async () => {

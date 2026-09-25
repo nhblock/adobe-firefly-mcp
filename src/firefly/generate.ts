@@ -22,6 +22,7 @@ import {
   collectVisibleImageFingerprints,
   dismissKnownDialogs,
   ensurePromptReady,
+  fillLocator,
   waitForNewImages,
   watchGenerationStart,
 } from "./wait.js";
@@ -99,7 +100,7 @@ export async function runTextToImage(
       timeout: config.operationTimeoutMs,
       log: (msg) => logger.debug(msg),
     });
-    await promptField.locator.fill(prompt);
+    await fillLocator(page, promptField.locator, prompt);
     logger.info("Prompt filled", { selector: promptField.candidate.name });
   } catch (err) {
     await captureDiagnostics(page, "image-prompt-fill-fail");

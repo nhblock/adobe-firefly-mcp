@@ -135,6 +135,11 @@ export const selectors = {
     ],
     prompt: [
       {
+        kind: "css" as const,
+        name: "prompt bar textarea",
+        selector: '[data-testid="prompt-bar-input"] textarea',
+      },
+      {
         kind: "role" as const,
         name: "prompt textbox",
         role: "textbox" as AriaRole,

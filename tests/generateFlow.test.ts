@@ -15,6 +15,8 @@ import type { Logger } from "../src/logger.js";
 // the live UI has sprung on this tool:
 // - a prompt-suggestion popup opens on input and swallows the next outside
 //   click (optionally ignoring Escape);
+// - the prompt is a <firefly-prompt> custom element that carries the
+//   placeholder on its host but renders the real textarea in shadow DOM, late;
 // - a first-run coachmark with an "OK" button sits on top of Generate;
 // - results from a previous run are already on the page, and their rendered
 //   size changes when the popup closes (a pure layout shift);
@@ -32,12 +34,13 @@ const FAKE_FIREFLY_HTML = String.raw`<!doctype html>
   #popup { position: fixed; bottom: 200px; left: 0; right: 0; background: #eee; }
   #coach { position: fixed; bottom: 0; right: 0; width: 320px; height: 140px; background: #fff; border: 1px solid; z-index: 10; }
   #bar { position: fixed; bottom: 20px; left: 20px; }
+  firefly-prompt { display: block; width: 600px; height: 80px; border: 1px solid; }
 </style></head><body>
   <button id="download-all" aria-label="Download all">Download all</button>
   <div id="results"></div>
   <div id="popup" data-testid="prompt-suggestion-popup" hidden>suggestions</div>
   <div id="bar">
-    <textarea aria-label="Prompt" placeholder="Describe the image you want to generate" rows="1"></textarea>
+    <firefly-prompt data-testid="prompt-bar-input" placeholder="Describe the image you want to generate"></firefly-prompt>
     <button data-testid="content-type-art">Art</button>
     <button data-testid="content-type-photo">Photo</button>
     <button data-testid="generate-button">Generate</button>
@@ -47,7 +50,22 @@ const FAKE_FIREFLY_HTML = String.raw`<!doctype html>
   window.generations = 0;
   let popupOpen = false;
   const popup = document.getElementById("popup");
-  const textarea = document.querySelector("textarea");
+  class FireflyPrompt extends HTMLElement {
+    connectedCallback() {
+      const root = this.attachShadow({ mode: "open" });
+      setTimeout(() => {
+        const textarea = document.createElement("textarea");
+        textarea.setAttribute("aria-label", "Prompt");
+        textarea.addEventListener("input", () => {
+          popup.hidden = false; popupOpen = true;
+        });
+        root.appendChild(textarea);
+      }, 8000);
+    }
+    get value() { return this.shadowRoot.querySelector("textarea")?.value ?? ""; }
+  }
+  customElements.define("firefly-prompt", FireflyPrompt);
+  const promptBox = document.querySelector("firefly-prompt");
   const results = document.getElementById("results");
 
   function tileImage(label) {
@@ -93,9 +111,6 @@ const FAKE_FIREFLY_HTML = String.raw`<!doctype html>
     popup.hidden = true; popupOpen = false;
     document.body.classList.toggle("tall");
   }
-  textarea.addEventListener("input", () => {
-    popup.hidden = false; popupOpen = true;
-  });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && popupOpen && window.escapeClosesPopup !== false) {
       closePopup();
@@ -114,7 +129,7 @@ const FAKE_FIREFLY_HTML = String.raw`<!doctype html>
     if (window.generateDoesNothing) return;
     window.generations += 1;
     const tag = "gen" + window.generations;
-    await fetch("/v3/images/generate-async", { method: "POST", body: textarea.value });
+    await fetch("/v3/images/generate-async", { method: "POST", body: promptBox.value });
     setTimeout(() => addGroup(tag), 400);
   });
 
@@ -200,7 +215,7 @@ describe("runTextToImage against a fake Firefly page", () => {
         () => (window as unknown as { generations: number }).generations,
       ),
     ).toBe(1);
-    expect(await page.locator("textarea").inputValue()).toBe(
+    expect(await page.locator("firefly-prompt textarea").inputValue()).toBe(
       "A yellow smiley face riding a horse",
     );
 

@@ -128,28 +128,56 @@ export async function detectAuthState(
   return "unknown";
 }
 
+/**
+ * Waits until Firefly's prompt can actually be typed into. On a cold load the
+ * <firefly-prompt> host (which carries the placeholder) renders well before
+ * its shadow-DOM textarea; resolving the prompt too early picked the host,
+ * which cannot be filled.
+ */
 export async function ensurePromptReady(page: Page, config: AppConfig): Promise<void> {
-  const state = await detectAuthState(page, config);
+  const deadline = Date.now() + config.navigationTimeoutMs;
 
-  if (state === "sign_in_required") {
-    throw new FireflyAuthRequiredError(
-      [
-        "Adobe sign-in is required in the opened browser window.",
-        "Sign in manually with your Adobe account, then run the tool again.",
-        "This MCP server never asks for, stores, or automates credentials.",
-      ].join(" "),
-    );
+  for (;;) {
+    const state = await detectAuthState(page, config);
+
+    if (state === "sign_in_required") {
+      throw new FireflyAuthRequiredError(
+        [
+          "Adobe sign-in is required in the opened browser window.",
+          "Sign in manually with your Adobe account, then run the tool again.",
+          "This MCP server never asks for, stores, or automates credentials.",
+        ].join(" "),
+      );
+    }
+
+    if (state === "ready" && (await hasEditablePrompt(page, config))) {
+      return;
+    }
+
+    if (Date.now() > deadline) {
+      throw new FireflyAutomationError(
+        [
+          "Could not find Firefly's prompt input.",
+          "The browser may still be loading, or Adobe may have changed the UI.",
+          "Try firefly_status first, or set FIREFLY_SELECTOR_PROMPT_INPUT.",
+        ].join(" "),
+      );
+    }
+
+    await sleep(500);
+  }
+}
+
+async function hasEditablePrompt(page: Page, config: AppConfig): Promise<boolean> {
+  for (const candidate of selectorGroups(config).promptInputs) {
+    const locator = locatorFor(page, candidate).first();
+    const visible = await locator.isVisible({ timeout: 150 }).catch(() => false);
+    if (visible && (await locator.isEditable({ timeout: 150 }).catch(() => false))) {
+      return true;
+    }
   }
 
-  if (state !== "ready") {
-    throw new FireflyAutomationError(
-      [
-        "Could not find Firefly's prompt input.",
-        "The browser may still be loading, or Adobe may have changed the UI.",
-        "Try firefly_status first, or set FIREFLY_SELECTOR_PROMPT_INPUT.",
-      ].join(" "),
-    );
-  }
+  return false;
 }
 
 // Identify a generated image by what it shows, never by where or how large it

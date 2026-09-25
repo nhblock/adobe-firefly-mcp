@@ -14,7 +14,9 @@ const generateInputShape = {
     .string()
     .trim()
     .optional()
-    .describe('Optional Firefly content type/control label, such as "Photo" or "Art".'),
+    .describe(
+      'Optional Firefly content type, such as "Photo" or "Art". Selected with the Firefly control; never added to the prompt text.',
+    ),
   count: z
     .number()
     .int()
@@ -22,7 +24,13 @@ const generateInputShape = {
     .max(4)
     .default(4)
     .describe("Maximum number of generated images to save."),
-  negativePrompt: z.string().trim().optional().describe("Optional things to avoid."),
+  negativePrompt: z
+    .string()
+    .trim()
+    .optional()
+    .describe(
+      "Not supported by Firefly's web UI; ignored with a warning. Describe what you want in the prompt instead.",
+    ),
   outputDir: z
     .string()
     .trim()
@@ -35,7 +43,9 @@ const generateInputShape = {
     .string()
     .trim()
     .optional()
-    .describe("Optional visible Firefly style/control label to try to select."),
+    .describe(
+      "Optional visible Firefly style/control label to try to select. Never added to the prompt text.",
+    ),
 };
 
 const generateInputSchema = z.object(generateInputShape);

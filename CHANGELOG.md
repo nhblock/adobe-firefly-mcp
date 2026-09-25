@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `firefly_generate` no longer reports success without generating. A Generate
+  click swallowed by the prompt-suggestion popup is detected (no generate
+  request and no new results) and retried once; if Firefly still does not
+  start, the tool fails with a clear error instead of downloading old results.
+- New results are identified by image source and natural size only, so layout
+  shifts no longer make the previous run's images look new.
+- Each new image is saved once: the tool hovers each result tile and clicks
+  only the download control inside it, then drops byte-identical duplicates.
+  Previously overlapping download selectors saved one image several times.
+- `contentClass` and `style` are no longer typed into the prompt text;
+  `contentClass` uses Firefly's content-type buttons. `negativePrompt` is
+  ignored with a warning, because Firefly's web UI has no exclusion field and
+  "Avoid: …" text in the prompt pulled those subjects into the image.
+- The first-run "Start generating images" coachmark (OK button) and the
+  prompt-suggestion popup are closed before clicking Generate.
+- Image fingerprinting retries when Firefly's URL change destroys the page's
+  execution context mid-check.
+
+### Added
+
+- `FIREFLY_GENERATION_START_TIMEOUT_MS` (default `20000`): how long to wait for
+  Firefly to start generating after each Generate click.
+
 ## [0.1.1] — First public release
 
 ### Added

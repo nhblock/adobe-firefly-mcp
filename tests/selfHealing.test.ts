@@ -84,6 +84,7 @@ const createMockPage = () => ({
 const createMockConfig = () => ({
   dataDir: "debug",
   downloadsDir: "debug/downloads",
+  generationStartTimeoutMs: 20000,
   generationTimeoutMs: 300000,
   headless: false,
   launchSlowMoMs: 0,

@@ -12,16 +12,18 @@ import {
   timestampedBasename,
 } from "../utils/filesystem.js";
 import { downloadGeneratedImages, type DownloadedImage } from "./download.js";
-import { composePrompt, escapeRegExp, shortPromptLabel } from "./prompts.js";
+import { escapeRegExp, shortPromptLabel } from "./prompts.js";
 import { selectors } from "./selectors.js";
 import { resolveLocator } from "./locatorResolver.js";
 import { captureDiagnostics } from "./diagnostics.js";
 import {
   FireflyAutomationError,
+  closePromptOverlays,
   collectVisibleImageFingerprints,
   dismissKnownDialogs,
   ensurePromptReady,
   waitForNewImages,
+  watchGenerationStart,
 } from "./wait.js";
 
 export interface TextToImageInput {
@@ -81,7 +83,15 @@ export async function runTextToImage(
   await ensurePromptReady(page, config);
   await dismissKnownDialogs(page, config);
 
-  const prompt = composePrompt(input);
+  // Only the prompt itself goes into the prompt box. Options are set through
+  // Firefly's own controls; typing "Content type: Art" / "Avoid: people" into
+  // the prompt made the model draw exactly what was meant to be avoided.
+  const prompt = input.prompt.trim();
+  if (input.negativePrompt !== undefined && input.negativePrompt.trim().length > 0) {
+    warnings.push(
+      "negativePrompt was ignored: Firefly's web UI has no exclusion field, and adding the words to the prompt pulls them into the image. Rephrase the prompt instead.",
+    );
+  }
 
   let promptField;
   try {
@@ -101,8 +111,8 @@ export async function runTextToImage(
   warnings.push(...(await applyOptionalControls(page, input)));
 
   const before = await collectVisibleImageFingerprints(page);
-  const generateClickScreenshots = await clickGenerate(page, config, logger);
-  await waitForNewImages(page, before, config.generationTimeoutMs);
+  const generateClickScreenshots = await clickGenerate(page, config, logger, before);
+  await waitForNewImages(page, before, config.generationTimeoutMs, input.count);
 
   const outputDir = resolveOutputDir(config, input.outputDir);
   const basename = timestampedBasename(`firefly-${shortPromptLabel(input.prompt)}`);
@@ -165,8 +175,8 @@ export async function runImageWorkflow(
   warnings.push(...(await applyOptionalControls(page, input)));
 
   const before = await collectVisibleImageFingerprints(page);
-  const generateClickScreenshots = await clickGenerate(page, config, logger);
-  await waitForNewImages(page, before, config.generationTimeoutMs);
+  const generateClickScreenshots = await clickGenerate(page, config, logger, before);
+  await waitForNewImages(page, before, config.generationTimeoutMs, input.count);
 
   const outputDir = resolveOutputDir(config, input.outputDir);
   const basename = timestampedBasename(
@@ -211,7 +221,53 @@ async function openFireflyPage(
   return page;
 }
 
+const GENERATE_CLICK_ATTEMPTS = 2;
+
+/**
+ * Clicks Generate and confirms Firefly actually started. Playwright reporting a
+ * successful click is not enough: an open popover can consume the click, which
+ * previously left the tool waiting on (and then "downloading") old results.
+ */
 async function clickGenerate(
+  page: Page,
+  config: AppConfig,
+  logger: Logger,
+  before: Set<string>,
+): Promise<GenerateClickScreenshots> {
+  let screenshots: GenerateClickScreenshots = {};
+
+  for (let attempt = 1; attempt <= GENERATE_CLICK_ATTEMPTS; attempt += 1) {
+    await closePromptOverlays(page, config);
+
+    const started = watchGenerationStart(page, before);
+    try {
+      screenshots = await clickGenerateOnce(page, config, logger);
+      if (await started.wait(config.generationStartTimeoutMs)) {
+        logger.info("Firefly generation started", { attempt });
+        return screenshots;
+      }
+    } finally {
+      started.dispose();
+    }
+
+    logger.warn("Generate click did not start a generation", { attempt });
+  }
+
+  await captureDiagnostics(page, "image-generate-not-started");
+  throw new FireflyAutomationError(
+    [
+      `Clicked Generate ${GENERATE_CLICK_ATTEMPTS} times, but Firefly did not start generating within ${config.generationStartTimeoutMs}ms each time.`,
+      "A popup or dialog may be covering the prompt bar, or the account may be out of credits.",
+      screenshots.afterClick !== undefined
+        ? `After-click screenshot: ${screenshots.afterClick}`
+        : undefined,
+    ]
+      .filter((part): part is string => part !== undefined)
+      .join(" "),
+  );
+}
+
+async function clickGenerateOnce(
   page: Page,
   config: AppConfig,
   logger: Logger,
@@ -368,7 +424,9 @@ async function applyOptionalControls(
       continue;
     }
 
-    const clicked = await clickTextOption(page, value);
+    const clicked =
+      (label === "content class" && (await clickContentType(page, value))) ||
+      (await clickTextOption(page, value));
     if (!clicked) {
       warnings.push(
         `Requested ${label} "${value}", but no matching visible Firefly control was found.`,
@@ -379,8 +437,22 @@ async function applyOptionalControls(
   return warnings;
 }
 
+async function clickContentType(page: Page, value: string): Promise<boolean> {
+  const button = page.getByTestId(`content-type-${value.trim().toLowerCase()}`).first();
+  const visible = await button.isVisible({ timeout: 500 }).catch(() => false);
+  if (!visible) {
+    return false;
+  }
+
+  return button.click({ timeout: 2_000 }).then(
+    () => true,
+    () => false,
+  );
+}
+
 async function clickTextOption(page: Page, value: string): Promise<boolean> {
-  const pattern = new RegExp(escapeRegExp(value.trim()), "iu");
+  // Whole-word match, so "Art" does not hit "Start" or "Smart".
+  const pattern = new RegExp(`(^|\\b)${escapeRegExp(value.trim())}(\\b|$)`, "iu");
   const candidates = [
     page.getByRole("button", { name: pattern }).first(),
     page.getByRole("option", { name: pattern }).first(),

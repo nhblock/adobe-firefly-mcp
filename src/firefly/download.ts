@@ -1,7 +1,8 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { Download, Page } from "playwright";
+import type { Download, Locator, Page } from "playwright";
 
 import type { AppConfig } from "../config.js";
 import type { Logger } from "../logger.js";
@@ -29,14 +30,17 @@ export interface DownloadGeneratedImagesOptions {
   outputDir: string;
 }
 
-interface ExtractedImage {
-  dataUrl: string;
-  fingerprint: string;
-  height: number;
-  mimeType: string;
-  width: number;
-}
+const NEW_IMAGE_ATTRIBUTE = "data-firefly-mcp-new-image";
 
+/**
+ * Saves each newly generated image once. Every new result image is handled on
+ * its own: hover it so Firefly reveals that tile's download button, click only
+ * a download control that lies inside the tile, and otherwise fall back to the
+ * image's own source. Several generic download selectors match the same
+ * hover-revealed button (and "Download all" sits outside every tile), so
+ * iterating selectors page-wide saved one image repeatedly; identical files
+ * are also dropped by content hash as a last line of defense.
+ */
 export async function downloadGeneratedImages(
   page: Page,
   config: AppConfig,
@@ -45,58 +49,116 @@ export async function downloadGeneratedImages(
 ): Promise<DownloadedImage[]> {
   await ensureDirectory(options.outputDir);
 
+  const newImageCount = await markNewImages(page, options.beforeFingerprints);
   const files: DownloadedImage[] = [];
-  files.push(
-    ...(await clickDownloadButtons(page, config, logger, options, options.maxFiles)),
-  );
+  const seenHashes = new Set<string>();
 
-  if (files.length < options.maxFiles) {
-    files.push(
-      ...(await saveVisibleImages(page, logger, {
-        ...options,
-        maxFiles: options.maxFiles - files.length,
-        startIndex: files.length + 1,
-      })),
-    );
+  for (
+    let index = 0;
+    index < newImageCount && files.length < options.maxFiles;
+    index += 1
+  ) {
+    const image = page.locator(`[${NEW_IMAGE_ATTRIBUTE}="${index}"]`);
+    const fileIndex = files.length + 1;
+    const file =
+      (await downloadViaTileButton(page, config, logger, image, options, fileIndex)) ??
+      (await saveImageSource(image, logger, options, fileIndex));
+
+    if (file === undefined) {
+      continue;
+    }
+
+    const hash = createHash("sha256")
+      .update(await fs.readFile(file.path))
+      .digest("hex");
+    if (seenHashes.has(hash)) {
+      await fs.rm(file.path, { force: true });
+      logger.warn("Dropped duplicate generated image", { path: file.path });
+      continue;
+    }
+
+    seenHashes.add(hash);
+    files.push(file);
   }
 
   return files;
 }
 
-async function clickDownloadButtons(
+async function markNewImages(
+  page: Page,
+  beforeFingerprints: Set<string>,
+): Promise<number> {
+  return page.evaluate(
+    ({ attribute, before }) => {
+      const beforeSet = new Set(before);
+      const seen = new Set<string>();
+      let count = 0;
+
+      for (const image of Array.from(document.images)) {
+        image.removeAttribute(attribute);
+        const rect = image.getBoundingClientRect();
+        const src = image.currentSrc || image.src;
+        const fingerprint = [src, image.naturalWidth, image.naturalHeight].join("|");
+
+        if (
+          src.length === 0 ||
+          beforeSet.has(fingerprint) ||
+          seen.has(fingerprint) ||
+          rect.width < 128 ||
+          rect.height < 128 ||
+          image.naturalWidth < 128 ||
+          image.naturalHeight < 128
+        ) {
+          continue;
+        }
+
+        seen.add(fingerprint);
+        image.setAttribute(attribute, String(count));
+        count += 1;
+      }
+
+      return count;
+    },
+    { attribute: NEW_IMAGE_ATTRIBUTE, before: Array.from(beforeFingerprints) },
+  );
+}
+
+async function downloadViaTileButton(
   page: Page,
   config: AppConfig,
   logger: Logger,
+  image: Locator,
   options: DownloadGeneratedImagesOptions,
-  maxFiles: number,
-): Promise<DownloadedImage[]> {
-  const groups = selectorGroups(config);
-  const files: DownloadedImage[] = [];
+  fileIndex: number,
+): Promise<DownloadedImage | undefined> {
+  await image.scrollIntoViewIfNeeded({ timeout: 5_000 }).catch(() => undefined);
+  const hovered = await image.hover({ timeout: 5_000 }).then(
+    () => true,
+    () => false,
+  );
+  const tile = await image.boundingBox().catch(() => null);
+  if (!hovered || tile === null) {
+    return undefined;
+  }
 
-  for (const candidate of groups.downloadButtons) {
-    if (files.length >= maxFiles) {
-      break;
-    }
-
+  for (const candidate of selectorGroups(config).downloadButtons) {
     const locator = locatorFor(page, candidate);
     const count = await locator.count().catch(() => 0);
 
-    for (let index = 0; index < count && files.length < maxFiles; index += 1) {
+    for (let index = 0; index < count; index += 1) {
       const button = locator.nth(index);
-      const visible = await button.isVisible({ timeout: 250 }).catch(() => false);
-      if (!visible) {
+      const box = await button.boundingBox().catch(() => null);
+      if (box === null || !isInside(box, tile)) {
         continue;
       }
 
       const downloadPromise = page
         .waitForEvent("download", { timeout: 15_000 })
         .catch(() => undefined);
-
       const clicked = await button.click({ timeout: 5_000 }).then(
         () => true,
         () => false,
       );
-
       const download = clicked ? await downloadPromise : undefined;
       if (download === undefined) {
         continue;
@@ -106,17 +168,35 @@ async function clickDownloadButtons(
         download,
         options.outputDir,
         options.basename,
-        files.length + 1,
+        fileIndex,
       );
-      files.push(file);
       logger.info("Saved generated image from download event", {
         path: file.path,
         selector: candidate.name,
       });
+      return file;
     }
   }
 
-  return files;
+  return undefined;
+}
+
+interface Box {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}
+
+function isInside(inner: Box, outer: Box, tolerance = 2): boolean {
+  return (
+    inner.width > 0 &&
+    inner.height > 0 &&
+    inner.x >= outer.x - tolerance &&
+    inner.y >= outer.y - tolerance &&
+    inner.x + inner.width <= outer.x + outer.width + tolerance &&
+    inner.y + inner.height <= outer.y + outer.height + tolerance
+  );
 }
 
 async function saveDownload(
@@ -139,120 +219,66 @@ async function saveDownload(
   };
 }
 
-async function saveVisibleImages(
-  page: Page,
+async function saveImageSource(
+  image: Locator,
   logger: Logger,
-  options: DownloadGeneratedImagesOptions & {
-    maxFiles: number;
-    startIndex: number;
-  },
-): Promise<DownloadedImage[]> {
-  const extracted = await extractVisibleImages(page, options.beforeFingerprints);
-  const files: DownloadedImage[] = [];
+  options: DownloadGeneratedImagesOptions,
+  fileIndex: number,
+): Promise<DownloadedImage | undefined> {
+  const extracted = await image
+    .evaluate(async (element: HTMLImageElement) => {
+      const src = element.currentSrc || element.src;
+      let dataUrl: string | undefined = src.startsWith("data:image/") ? src : undefined;
 
-  for (const image of extracted.slice(0, options.maxFiles)) {
-    const parsed = parseDataUrlImage(image.dataUrl);
-    const target = await uniqueFilePath(
-      options.outputDir,
-      `${sanitizeFilenamePart(options.basename)}-${options.startIndex + files.length}`,
-      extensionForMimeType(image.mimeType) || parsed.extension,
-    );
-
-    await fs.writeFile(target, parsed.buffer);
-    files.push({
-      height: image.height,
-      mimeType: parsed.mimeType,
-      path: target,
-      source: "image-src",
-      width: image.width,
-    });
-    logger.info("Saved generated image from visible image source", { path: target });
-  }
-
-  return files;
-}
-
-async function extractVisibleImages(
-  page: Page,
-  beforeFingerprints: Set<string>,
-): Promise<ExtractedImage[]> {
-  return page.evaluate(async (before) => {
-    const beforeSet = new Set(before);
-    const images = Array.from(document.images)
-      .map((image) => {
-        const rect = image.getBoundingClientRect();
-        const src = image.currentSrc || image.src;
-        const fingerprint = [
-          src,
-          image.naturalWidth,
-          image.naturalHeight,
-          image.alt,
-          Math.round(rect.width),
-          Math.round(rect.height),
-        ].join("|");
-
-        return { fingerprint, image, rect, src };
-      })
-      .filter(({ fingerprint, image, rect, src }) => {
-        return (
-          src.length > 0 &&
-          !beforeSet.has(fingerprint) &&
-          rect.width >= 128 &&
-          rect.height >= 128 &&
-          image.naturalWidth >= 128 &&
-          image.naturalHeight >= 128
-        );
-      });
-
-    const toDataUrl = async (image: HTMLImageElement): Promise<string | undefined> => {
-      const src = image.currentSrc || image.src;
-
-      if (src.startsWith("data:image/")) {
-        return src;
-      }
-
-      try {
-        const response = await fetch(src);
-        const blob = await response.blob();
-
-        return await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.addEventListener("load", () => {
-            if (typeof reader.result === "string") {
-              resolve(reader.result);
-              return;
-            }
-
-            reject(new Error("FileReader did not produce a data URL."));
+      if (dataUrl === undefined) {
+        try {
+          const blob = await (await fetch(src)).blob();
+          dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.addEventListener("load", () => {
+              if (typeof reader.result === "string") {
+                resolve(reader.result);
+                return;
+              }
+              reject(new Error("FileReader did not produce a data URL."));
+            });
+            reader.addEventListener("error", () =>
+              reject(reader.error ?? new Error("FileReader failed.")),
+            );
+            reader.readAsDataURL(blob);
           });
-          reader.addEventListener("error", () =>
-            reject(reader.error ?? new Error("FileReader failed.")),
-          );
-          reader.readAsDataURL(blob);
-        });
-      } catch {
-        return undefined;
-      }
-    };
-
-    const extracted = await Promise.all(
-      images.map(async ({ fingerprint, image }) => {
-        const dataUrl = await toDataUrl(image);
-        if (dataUrl === undefined) {
+        } catch {
           return undefined;
         }
+      }
 
-        const mimeMatch = /^data:(image\/[a-zA-Z0-9.+-]+);/u.exec(dataUrl);
-        return {
-          dataUrl,
-          fingerprint,
-          height: image.naturalHeight,
-          mimeType: mimeMatch?.[1] ?? "image/png",
-          width: image.naturalWidth,
-        };
-      }),
-    );
+      return {
+        dataUrl,
+        height: element.naturalHeight,
+        width: element.naturalWidth,
+      };
+    })
+    .catch(() => undefined);
 
-    return extracted.filter((image): image is ExtractedImage => image !== undefined);
-  }, Array.from(beforeFingerprints));
+  if (extracted === undefined) {
+    return undefined;
+  }
+
+  const parsed = parseDataUrlImage(extracted.dataUrl);
+  const target = await uniqueFilePath(
+    options.outputDir,
+    `${sanitizeFilenamePart(options.basename)}-${fileIndex}`,
+    extensionForMimeType(parsed.mimeType) || parsed.extension,
+  );
+
+  await fs.writeFile(target, parsed.buffer);
+  logger.info("Saved generated image from visible image source", { path: target });
+
+  return {
+    height: extracted.height,
+    mimeType: parsed.mimeType,
+    path: target,
+    source: "image-src",
+    width: extracted.width,
+  };
 }

@@ -207,7 +207,22 @@ export const selectors = {
         role: "button" as AriaRole,
         text: /close|dismiss|got it/i,
       },
+      // First-run coachmark ("Start generating images ... OK") next to Generate.
+      {
+        kind: "role" as const,
+        name: "acknowledge coachmark",
+        role: "button" as AriaRole,
+        text: /^\s*(ok|okay)\s*$/i,
+      },
       { kind: "css" as const, name: "aria close", selector: '[aria-label*="close" i]' },
+    ],
+    // Open popovers that swallow the next click outside them.
+    popovers: [
+      {
+        kind: "testId" as const,
+        name: "prompt suggestion popup",
+        testId: "prompt-suggestion-popup",
+      },
     ],
     download: [
       {

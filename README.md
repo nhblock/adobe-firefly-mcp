@@ -438,31 +438,32 @@ Successful tool calls return JSON like:
 
 All configuration is optional.
 
-| Environment variable               | Default                          | Purpose                                                                |
-| ---------------------------------- | -------------------------------- | ---------------------------------------------------------------------- |
-| `FIREFLY_MCP_DATA_DIR`             | current working directory        | Base directory for `downloads/` and `profile/`.                        |
-| `FIREFLY_DOWNLOADS_DIR`            | `<dataDir>/downloads`            | Saved image output directory.                                          |
-| `FIREFLY_PROFILE_DIR`              | `<dataDir>/profile`              | Persistent Chromium user data directory.                               |
-| `FIREFLY_HEADLESS`                 | `false`                          | Run Chromium headless after you have already signed in.                |
-| `FIREFLY_LOG_LEVEL`                | `info`                           | `debug`, `info`, `warn`, `error`, or `silent`. Logs go to stderr only. |
-| `FIREFLY_MAX_DOWNLOADS`            | `4`                              | Default maximum generated images to save.                              |
-| `FIREFLY_OPERATION_TIMEOUT_MS`     | `180000`                         | General UI action timeout.                                             |
-| `FIREFLY_GENERATION_TIMEOUT_MS`    | `300000`                         | Generation wait timeout.                                               |
-| `FIREFLY_NAVIGATION_TIMEOUT_MS`    | `60000`                          | Page navigation timeout.                                               |
-| `FIREFLY_BASE_URL`                 | `https://firefly.adobe.com`      | Base Firefly URL.                                                      |
-| `FIREFLY_TEXT_TO_IMAGE_URL`        | `<base>/generate/images`         | Prompt-to-image route.                                                 |
-| `FIREFLY_VARIATIONS_URL`           | `<base>`                         | Variations route.                                                      |
-| `FIREFLY_EXPAND_URL`               | `<base>/tools/generative-expand` | Expand route.                                                          |
-| `FIREFLY_REMOVE_BACKGROUND_URL`    | `<base>/tools/remove-background` | Remove-background route.                                               |
-| `FIREFLY_VIDEO_URL`                | `<base>/generate/video`          | Video generation route.                                                |
-| `FIREFLY_SELECTOR_PROMPT_INPUT`    | built-in candidates              | CSS selector override for the prompt input.                            |
-| `FIREFLY_SELECTOR_GENERATE_BUTTON` | built-in candidates              | CSS selector override for the generate/action button.                  |
-| `FIREFLY_SELECTOR_DOWNLOAD_BUTTON` | built-in candidates              | CSS selector override for download buttons.                            |
-| `FIREFLY_SELECTOR_UPLOAD_BUTTON`   | built-in candidates              | CSS selector override for upload controls.                             |
-| `FIREFLY_USE_PERSISTENT_PROFILE`   | `false`                          | Use real Chrome with user's existing profile instead of Chromium.      |
-| `FIREFLY_USER_DATA_DIR`            | undefined                        | Path to Chrome user data directory (required when using persistent).   |
-| `FIREFLY_SELF_HEALING_ENABLED`     | `true`                           | Enable automatic selector recovery.                                    |
-| `FIREFLY_SELF_HEALING_THRESHOLD`   | `0.7`                            | Minimum confidence score (0-1) to accept recovered selector.           |
+| Environment variable                  | Default                          | Purpose                                                                |
+| ------------------------------------- | -------------------------------- | ---------------------------------------------------------------------- |
+| `FIREFLY_MCP_DATA_DIR`                | current working directory        | Base directory for `downloads/` and `profile/`.                        |
+| `FIREFLY_DOWNLOADS_DIR`               | `<dataDir>/downloads`            | Saved image output directory.                                          |
+| `FIREFLY_PROFILE_DIR`                 | `<dataDir>/profile`              | Persistent Chromium user data directory.                               |
+| `FIREFLY_HEADLESS`                    | `false`                          | Run Chromium headless after you have already signed in.                |
+| `FIREFLY_LOG_LEVEL`                   | `info`                           | `debug`, `info`, `warn`, `error`, or `silent`. Logs go to stderr only. |
+| `FIREFLY_MAX_DOWNLOADS`               | `4`                              | Default maximum generated images to save.                              |
+| `FIREFLY_OPERATION_TIMEOUT_MS`        | `180000`                         | General UI action timeout.                                             |
+| `FIREFLY_GENERATION_TIMEOUT_MS`       | `300000`                         | Generation wait timeout.                                               |
+| `FIREFLY_GENERATION_START_TIMEOUT_MS` | `20000`                          | Wait for Firefly to start generating after each Generate click.        |
+| `FIREFLY_NAVIGATION_TIMEOUT_MS`       | `60000`                          | Page navigation timeout.                                               |
+| `FIREFLY_BASE_URL`                    | `https://firefly.adobe.com`      | Base Firefly URL.                                                      |
+| `FIREFLY_TEXT_TO_IMAGE_URL`           | `<base>/generate/images`         | Prompt-to-image route.                                                 |
+| `FIREFLY_VARIATIONS_URL`              | `<base>`                         | Variations route.                                                      |
+| `FIREFLY_EXPAND_URL`                  | `<base>/tools/generative-expand` | Expand route.                                                          |
+| `FIREFLY_REMOVE_BACKGROUND_URL`       | `<base>/tools/remove-background` | Remove-background route.                                               |
+| `FIREFLY_VIDEO_URL`                   | `<base>/generate/video`          | Video generation route.                                                |
+| `FIREFLY_SELECTOR_PROMPT_INPUT`       | built-in candidates              | CSS selector override for the prompt input.                            |
+| `FIREFLY_SELECTOR_GENERATE_BUTTON`    | built-in candidates              | CSS selector override for the generate/action button.                  |
+| `FIREFLY_SELECTOR_DOWNLOAD_BUTTON`    | built-in candidates              | CSS selector override for download buttons.                            |
+| `FIREFLY_SELECTOR_UPLOAD_BUTTON`      | built-in candidates              | CSS selector override for upload controls.                             |
+| `FIREFLY_USE_PERSISTENT_PROFILE`      | `false`                          | Use real Chrome with user's existing profile instead of Chromium.      |
+| `FIREFLY_USER_DATA_DIR`               | undefined                        | Path to Chrome user data directory (required when using persistent).   |
+| `FIREFLY_SELF_HEALING_ENABLED`        | `true`                           | Enable automatic selector recovery.                                    |
+| `FIREFLY_SELF_HEALING_THRESHOLD`      | `0.7`                            | Minimum confidence score (0-1) to accept recovered selector.           |
 
 Adobe can change the Firefly UI at any time. The server uses resilient Playwright locators first, then CSS selector overrides when needed. Self-healing automatically recovers when selectors break.
 

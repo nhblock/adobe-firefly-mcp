@@ -25,6 +25,7 @@ export interface SelectorOverrides {
 export interface AppConfig {
   dataDir: string;
   downloadsDir: string;
+  generationStartTimeoutMs: number;
   generationTimeoutMs: number;
   headless: boolean;
   launchSlowMoMs: number;
@@ -41,6 +42,7 @@ export interface AppConfig {
 
 const DEFAULT_OPERATION_TIMEOUT_MS = 180_000;
 const DEFAULT_GENERATION_TIMEOUT_MS = 300_000;
+const DEFAULT_GENERATION_START_TIMEOUT_MS = 20_000;
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_DOWNLOADS = 4;
 
@@ -73,6 +75,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     dataDir,
     downloadsDir,
+    generationStartTimeoutMs: readInteger(
+      env,
+      "FIREFLY_GENERATION_START_TIMEOUT_MS",
+      DEFAULT_GENERATION_START_TIMEOUT_MS,
+    ),
     generationTimeoutMs: readInteger(
       env,
       "FIREFLY_GENERATION_TIMEOUT_MS",
